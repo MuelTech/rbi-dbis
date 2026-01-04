@@ -1,0 +1,5 @@
+{
+  "name": "Barangay 418 Dashboard",
+  "description": "A pixel-perfect desktop dashboard for Barangay management featuring population statistics, household data, and document transaction tracking.",
+  "requestFramePermissions": []
+}
