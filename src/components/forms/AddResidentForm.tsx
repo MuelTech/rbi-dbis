@@ -29,14 +29,16 @@ interface FamilyMember {
     isSoloParent: boolean;
 }
 
+const BLOCK_LIMITS: Record<string, number> = {
+    '1': 51,
+    '2': 55,
+    '3': 50,
+};
+
 const BLOCK_OPTIONS = [
     { value: '1', label: 'Block 1' },
     { value: '2', label: 'Block 2' },
-];
-
-const HOUSEHOLD_OPTIONS = [
-    { value: '1', label: '101' },
-    { value: '2', label: '102' },
+    { value: '3', label: 'Block 3' },
 ];
 
 const SUFFIX_OPTIONS = [
@@ -182,6 +184,14 @@ const AddResidentForm: React.FC<AddResidentFormProps> = ({ onCancel, setIsNaviga
     const [familyMembers, setFamilyMembers] = useState<FamilyMember[]>([]);
     const [errors, setErrors] = useState<Record<string, string>>({});
     const [showBackConfirmation, setShowBackConfirmation] = useState(false);
+
+    const householdOptions = React.useMemo(() => {
+        if (!formData.block || !BLOCK_LIMITS[formData.block]) return [];
+        return Array.from({ length: BLOCK_LIMITS[formData.block] }, (_, i) => ({
+            value: String(i + 1),
+            label: String(i + 1)
+        }));
+    }, [formData.block]);
 
     // Track form dirty state
     useEffect(() => {
@@ -381,7 +391,7 @@ const AddResidentForm: React.FC<AddResidentFormProps> = ({ onCancel, setIsNaviga
                                         <label className="text-[13px] font-bold text-gray-700">Block <span className="text-red-500">*</span></label>
                                         <CustomSelect
                                             value={formData.block}
-                                            onChange={(value) => setFormData({...formData, block: value})}
+                                            onChange={(value) => setFormData({...formData, block: value, householdNumber: ''})}
                                             options={BLOCK_OPTIONS}
                                             placeholder="Select Block"
                                             error={errors.block}
@@ -392,7 +402,7 @@ const AddResidentForm: React.FC<AddResidentFormProps> = ({ onCancel, setIsNaviga
                                         <CustomSelect
                                             value={formData.householdNumber}
                                             onChange={(value) => setFormData({...formData, householdNumber: value})}
-                                            options={HOUSEHOLD_OPTIONS}
+                                            options={householdOptions}
                                             placeholder="Select Household Number"
                                             error={errors.householdNumber}
                                         />

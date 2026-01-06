@@ -10,6 +10,7 @@ interface FamilyViewModalProps {
     familyId: string;
     familyName: string;
     onShowSuccess?: (message: string) => void;
+    familyStatus?: 'Moveout' | 'Deceased';
 }
 
 // Mock data for members
@@ -21,13 +22,24 @@ const MOCK_MEMBERS = [
     { id: '027', lastName: 'Dela Cruz', firstName: 'Lola', sex: 'Female', age: 78, voter: 'Yes', status: 'Deceased' },
 ];
 
-const FamilyViewModal: React.FC<FamilyViewModalProps> = ({ isOpen, onClose, familyId, familyName, onShowSuccess }) => {
+const FamilyViewModal: React.FC<FamilyViewModalProps> = ({ isOpen, onClose, familyId, familyName, onShowSuccess, familyStatus }) => {
     const [isEditing, setIsEditing] = useState(false);
     const [viewMode, setViewMode] = useState<'view' | 'add'>('view');
     const [openDropdown, setOpenDropdown] = useState<string | null>(null);
     const dropdownRef = useRef<HTMLDivElement>(null);
     const originalDataRef = useRef<typeof formData | null>(null);
     
+    // Derived members based on familyStatus
+    const displayMembers = React.useMemo(() => {
+        if (familyStatus === 'Moveout') {
+            return MOCK_MEMBERS.map(member => ({
+                ...member,
+                status: 'Moveout'
+            }));
+        }
+        return MOCK_MEMBERS;
+    }, [familyStatus]);
+
     const [selectedResident, setSelectedResident] = useState<Resident | null>(null);
     const [showResidentProfile, setShowResidentProfile] = useState(false);
 
@@ -133,7 +145,7 @@ const FamilyViewModal: React.FC<FamilyViewModalProps> = ({ isOpen, onClose, fami
                         
                         {openDropdown === key && (
                             <div className="absolute z-20 top-full left-0 right-0 mt-1 bg-white border border-gray-100 rounded-xl shadow-lg py-1 max-h-60 overflow-auto animate-in fade-in zoom-in-95 duration-100">
-                                {MOCK_MEMBERS.map(member => {
+                                {displayMembers.map(member => {
                                     const fullName = `${member.lastName}, ${member.firstName}`;
                                     return (
                                         <button
@@ -309,7 +321,7 @@ const FamilyViewModal: React.FC<FamilyViewModalProps> = ({ isOpen, onClose, fami
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-gray-50">
-                                            {MOCK_MEMBERS.map((member) => (
+                                            {displayMembers.map((member) => (
                                                 <tr key={member.id} className="hover:bg-gray-50/50 transition-colors">
                                                     <td className="py-3 pl-6 pr-4 text-[13px] font-bold text-gray-900">{member.id}</td>
                                                     <td className="py-3 px-4 text-[13px] font-medium text-gray-700">{member.lastName}</td>

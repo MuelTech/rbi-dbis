@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useLayoutEffect } from 'react';
 import { Search, ChevronLeft, ChevronRight, RotateCcw } from 'lucide-react';
 import ContentCard from '@/components/ui/ContentCard';
+import FamilyViewModal from '@/components/ui/FamilyViewModal';
 
 interface ArchivedFamily {
     id: string;
@@ -28,6 +29,10 @@ const Archived: React.FC = () => {
     const [currentPage, setCurrentPage] = useState(1);
     const [itemsPerPage, setItemsPerPage] = useState(10);
     const [rowHeight, setRowHeight] = useState(60);
+    
+    // Add Family View Modal state
+    const [selectedFamily, setSelectedFamily] = useState<ArchivedFamily | null>(null);
+    const [isFamilyModalOpen, setIsFamilyModalOpen] = useState(false);
 
     const containerRef = useRef<HTMLDivElement>(null);
     const headerRef = useRef<HTMLTableSectionElement>(null);
@@ -122,7 +127,13 @@ const Archived: React.FC = () => {
                                         <td className="px-4 text-[14px] text-gray-600 truncate">{item.status}</td>
                                         <td className="px-4 text-center">
                                             <div className="flex items-center justify-center gap-3">
-                                                <button className="text-gray-400 hover:text-blue-600 transition-colors">
+                                                <button 
+                                                    onClick={() => {
+                                                        setSelectedFamily(item);
+                                                        setIsFamilyModalOpen(true);
+                                                    }}
+                                                    className="text-gray-400 hover:text-blue-600 transition-colors"
+                                                >
                                                     <Search size={18} />
                                                 </button>
                                                 <button className="text-gray-400 hover:text-blue-600 transition-colors">
@@ -177,6 +188,17 @@ const Archived: React.FC = () => {
                     </div>
                 </div>
             </ContentCard>
+
+            {/* Family View Modal */}
+            {selectedFamily && (
+                <FamilyViewModal 
+                    isOpen={isFamilyModalOpen}
+                    onClose={() => setIsFamilyModalOpen(false)}
+                    familyId={selectedFamily.id}
+                    familyName="Dela Cruz"
+                    familyStatus={selectedFamily.status}
+                />
+            )}
         </div>
     );
 };

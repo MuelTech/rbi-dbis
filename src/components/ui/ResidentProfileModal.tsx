@@ -73,6 +73,7 @@ const ResidentProfileModal: React.FC<ResidentProfileModalProps> = ({ isOpen, onC
                 middleName: 'Santos',
                 lastName: resident.lastName,
                 suffix: 'Select Suffix',
+                relationshipToHead: 'Head',
                 dateOfBirth: '1990-05-15',
                 placeOfBirth: 'Quezon City',
                 civilStatus: 'Married',
@@ -120,6 +121,7 @@ const ResidentProfileModal: React.FC<ResidentProfileModalProps> = ({ isOpen, onC
                 middleName: 'Santos',
                 lastName: resident.lastName,
                 suffix: 'Select Suffix',
+                relationshipToHead: 'Head',
                 dateOfBirth: '1990-05-15',
                 placeOfBirth: 'Quezon City',
                 civilStatus: 'Married',
@@ -298,6 +300,16 @@ const ResidentProfileModal: React.FC<ResidentProfileModalProps> = ({ isOpen, onC
                                         options={['Jr.', 'Sr.', 'II', 'III', 'IV']}
                                         disabled={!isEditing}
                                         placeholder="Select Suffix"
+                                    />
+                                </div>
+                                <div className="space-y-1.5">
+                                    <label className="text-[12px] font-semibold text-gray-500">Relationship to Family Head</label>
+                                    <CustomDropdown
+                                        value={formData.relationshipToHead}
+                                        onChange={(value) => setFormData((prev: any) => ({ ...prev, relationshipToHead: value }))}
+                                        options={['Head', 'Spouse', 'Son', 'Daughter', 'Parent', 'Sibling', 'Grandparent', 'Grandchild', 'Other']}
+                                        disabled={!isEditing}
+                                        placeholder="Select Relationship"
                                     />
                                 </div>
 
