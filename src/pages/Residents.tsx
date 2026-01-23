@@ -3,7 +3,7 @@ import { Plus, Search, ChevronDown, ChevronLeft, ChevronRight, UserPlus, Upload,
 import { Resident } from '@/types';
 import ContentCard from '@/components/ui/ContentCard';
 import ResidentProfileModal from '@/components/ui/ResidentProfileModal';
-import AddResidentForm from '@/components/forms/AddResidentForm';
+import AddResidentWizard from '@/components/features/AddResident/AddResidentWizard';
 
 const residentsData: Resident[] = [
     { id: '001', lastName: 'Teano', firstName: 'John Lemuel', sex: 'Male', age: 23, voter: 'Yes', status: 'Active' },
@@ -615,7 +615,7 @@ const Residents: React.FC<ResidentsProps> = ({ setIsNavigationBlocked, onShowSuc
                 </div>
             </div>                    </>
                 ) : (
-                    <AddResidentForm 
+                    <AddResidentWizard
                         onCancel={() => {
                             setViewMode('list');
                             if (setIsNavigationBlocked) setIsNavigationBlocked(false);
