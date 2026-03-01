@@ -4,6 +4,8 @@ import { Resident } from '@/types';
 import ContentCard from '@/components/ui/ContentCard';
 import ResidentProfileModal from '@/components/ui/ResidentProfileModal';
 import AddResidentForm from '@/components/forms/AddResidentForm';
+import BatchImportModal from '@/components/ui/BatchImportModal';
+import SuccessToast from '@/components/ui/SuccessToast';
 
 const residentsData: Resident[] = [
     { id: '001', lastName: 'Teano', firstName: 'John Lemuel', sex: 'Male', age: 23, voter: 'Yes', status: 'Active' },
@@ -83,6 +85,13 @@ const Residents: React.FC<ResidentsProps> = ({ setIsNavigationBlocked, onShowSuc
     // Profile Modal State
     const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
     const [selectedResident, setSelectedResident] = useState<Resident | null>(null);
+
+    // Batch Import Modal State
+    const [isBatchImportOpen, setIsBatchImportOpen] = useState(false);
+
+    // Success Toast State
+    const [toastMessage, setToastMessage] = useState('');
+    const [showToast, setShowToast] = useState(false);
 
     // Reset Add Resident Menu when switching views
     useEffect(() => {
@@ -295,7 +304,10 @@ const Residents: React.FC<ResidentsProps> = ({ setIsNavigationBlocked, onShowSuc
                                     <UserPlus size={16} className="text-gray-400 group-hover:text-blue-500" />
                                     Add Residents
                                 </button>
-                                <button className="w-full text-left px-3 py-2 text-[13px] font-medium text-gray-700 hover:bg-blue-50 hover:text-blue-600 rounded-lg flex items-center gap-2.5 transition-colors">
+                                <button 
+                                    onClick={() => { setIsBatchImportOpen(true); setIsAddResidentMenuOpen(false); }}
+                                    className="w-full text-left px-3 py-2 text-[13px] font-medium text-gray-700 hover:bg-blue-50 hover:text-blue-600 rounded-lg flex items-center gap-2.5 transition-colors"
+                                >
                                     <Upload size={16} className="text-gray-400 group-hover:text-blue-500" />
                                     Batch Import
                                 </button>
@@ -630,6 +642,23 @@ const Residents: React.FC<ResidentsProps> = ({ setIsNavigationBlocked, onShowSuc
                 onClose={() => setIsProfileModalOpen(false)}
                 resident={selectedResident}
                 onShowSuccess={onShowSuccess}
+            />
+
+            <BatchImportModal
+                isOpen={isBatchImportOpen}
+                onClose={() => setIsBatchImportOpen(false)}
+                onImportComplete={(count) => {
+                    setIsBatchImportOpen(false);
+                    setToastMessage(`${count} residents imported successfully!`);
+                    setShowToast(true);
+                }}
+                existingResidents={residentsData}
+            />
+
+            <SuccessToast
+                message={toastMessage}
+                isVisible={showToast}
+                onClose={() => setShowToast(false)}
             />
         </>
     );
