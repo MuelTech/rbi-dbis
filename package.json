@@ -1,24 +1,17 @@
 {
-  "name": "barangay-418-dashboard",
+  "name": "rbi-dbis",
   "private": true,
-  "version": "0.0.0",
-  "type": "module",
+  "pnpm": {
+    "onlyBuiltDependencies": ["esbuild", "@prisma/client", "@prisma/engines", "prisma", "electron", "electron-winstaller"]
+  },
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "preview": "vite preview"
-  },
-  "dependencies": {
-    "lucide-react": "^0.562.0",
-    "react": "^19.2.3",
-    "react-dom": "^19.2.3",
-    "react-router-dom": "^7.11.0",
-    "xlsx": "^0.18.5"
-  },
-  "devDependencies": {
-    "@types/node": "^22.14.0",
-    "@vitejs/plugin-react": "^5.0.0",
-    "typescript": "~5.8.2",
-    "vite": "^6.2.0"
+    "dev:server": "pnpm --filter @rbi/server dev",
+    "dev:desktop": "pnpm --filter @rbi/desktop dev",
+    "build:db": "pnpm --filter @rbi/db build",
+    "build:server": "pnpm --filter @rbi/server build",
+    "build:desktop": "pnpm --filter @rbi/desktop build",
+    "db:migrate": "pnpm --filter @rbi/db exec prisma migrate dev",
+    "db:generate": "pnpm --filter @rbi/db exec prisma generate",
+    "db:studio": "pnpm --filter @rbi/db exec prisma studio"
   }
 }

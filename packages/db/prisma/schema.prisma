@@ -1,0 +1,313 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Block ───────────────────────────────────────────────────────────────────
+
+model Block {
+  id          String      @id @default(cuid())
+  blockNumber String      @map("block_number") @db.VarChar(20)
+  createdAt   DateTime    @default(now()) @map("created_at")
+  updatedAt   DateTime    @updatedAt @map("updated_at")
+
+  households  Household[]
+
+  @@map("blocks")
+}
+
+// ─── Household ───────────────────────────────────────────────────────────────
+
+model Household {
+  id              String   @id @default(cuid())
+  brgyHouseholdNo String   @map("brgy_household_no") @db.VarChar(50)
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  blockId         String   @map("block_id")
+  block           Block    @relation(fields: [blockId], references: [id])
+
+  families        Family[]
+
+  @@map("households")
+}
+
+// ─── Family ──────────────────────────────────────────────────────────────────
+
+model Family {
+  id          String   @id @default(cuid())
+  familyName  String   @map("family_name") @db.VarChar(100)
+  isArchived  Boolean  @default(false) @map("is_archived")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  householdId  String    @map("household_id")
+  household    Household @relation(fields: [householdId], references: [id])
+
+  headPersonId String   @unique @map("head_person_id")
+  headPerson   Resident @relation("FamilyHead", fields: [headPersonId], references: [id])
+
+  addressId    String  @unique @map("address_id")
+  address      Address @relation(fields: [addressId], references: [id])
+
+  pet          FamilyPet?
+  vehicle      FamilyVehicle?
+  members      FamilyMember[]
+
+  @@map("families")
+}
+
+// ─── FamilyPet ───────────────────────────────────────────────────────────────
+
+model FamilyPet {
+  id           String  @id @default(cuid())
+  isPetOwner   Boolean @default(false) @map("is_pet_owner")
+  numberOfDogs Int     @default(0) @map("number_of_dogs")
+  numberOfCats Int     @default(0) @map("number_of_cats")
+  others       String? @db.VarChar(255)
+
+  familyId     String @unique @map("family_id")
+  family       Family @relation(fields: [familyId], references: [id])
+
+  @@map("family_pets")
+}
+
+// ─── FamilyVehicle ───────────────────────────────────────────────────────────
+
+model FamilyVehicle {
+  id                    String  @id @default(cuid())
+  numberOfMotorcycles   Int     @default(0) @map("number_of_motorcycles")
+  motorcyclePlateNumber String? @map("motorcycle_plate_number") @db.VarChar(100)
+  numberOfVehicles      Int     @default(0) @map("number_of_vehicles")
+  vehiclePlateNumber    String? @map("vehicle_plate_number") @db.VarChar(100)
+
+  familyId              String @unique @map("family_id")
+  family                Family @relation(fields: [familyId], references: [id])
+
+  @@map("family_vehicles")
+}
+
+// ─── FamilyMember ────────────────────────────────────────────────────────────
+
+model FamilyMember {
+  id               String   @id @default(cuid())
+  relationshipType String   @map("relationship_type") @db.VarChar(50)
+
+  familyId         String   @map("family_id")
+  family           Family   @relation(fields: [familyId], references: [id])
+
+  residentId       String   @unique @map("resident_id")
+  resident         Resident @relation(fields: [residentId], references: [id])
+
+  @@map("family_members")
+}
+
+// ─── Address ─────────────────────────────────────────────────────────────────
+
+model Address {
+  id         String @id @default(cuid())
+  houseNo    String @map("house_no") @db.VarChar(20)
+  streetName String @map("street_name") @db.VarChar(100)
+  alleyName  String @map("alley_name") @db.VarChar(100)
+
+  family     Family?
+
+  @@map("addresses")
+}
+
+// ─── Resident ────────────────────────────────────────────────────────────────
+
+model Resident {
+  id             String         @id @default(cuid())
+  lastName       String         @map("last_name") @db.VarChar(50)
+  firstName      String         @map("first_name") @db.VarChar(50)
+  middleName     String?        @map("middle_name") @db.VarChar(50)
+  suffix         String?        @db.VarChar(10)
+  placeOfBirth   String?        @map("place_of_birth") @db.VarChar(150)
+  dateOfBirth    DateTime?      @map("date_of_birth") @db.Date
+  sex            Sex
+  civilStatus    String?        @map("civil_status") @db.VarChar(20)
+  isVoter        Boolean        @default(false) @map("is_voter")
+  isPwd          Boolean        @default(false) @map("is_pwd")
+  isSoloParent   Boolean        @default(false) @map("is_solo_parent")
+  isOwner        Boolean        @default(false) @map("is_owner")
+  studentType    String?        @map("student_type") @db.VarChar(50)
+  statusType     ResidentStatus @default(Alive) @map("status_type")
+  contactNumber  String?        @map("contact_number") @db.VarChar(20)
+  occupationType String?        @map("occupation_type") @db.VarChar(50)
+  profileImage   String?        @map("profile_image") @db.VarChar(255)
+  createdAt      DateTime       @default(now()) @map("created_at")
+  updatedAt      DateTime       @updatedAt @map("updated_at")
+
+  recordId       String?        @unique @map("record_id")
+  record         Record?        @relation(fields: [recordId], references: [id])
+
+  familyHead     Family?        @relation("FamilyHead")
+  familyMember   FamilyMember?
+  orders         Order[]
+
+  @@map("residents")
+}
+
+// ─── Record ──────────────────────────────────────────────────────────────────
+
+model Record {
+  id          String    @id @default(cuid())
+  hasRecord   Boolean   @default(true) @map("has_record")
+  recordDate  DateTime? @map("record_date")
+  description String?   @db.Text
+
+  resident    Resident?
+
+  @@map("records")
+}
+
+// ─── User ────────────────────────────────────────────────────────────────────
+
+model User {
+  id         String    @id @default(cuid())
+  username   String    @unique @db.VarChar(50)
+  password   String    @db.VarChar(255)
+  roleType   String    @map("role_type") @db.VarChar(50)
+  isActive   Boolean   @default(true) @map("is_active")
+  lastLogin  DateTime? @map("last_login")
+  permission String?   @db.VarChar(50)
+  createdAt  DateTime  @default(now()) @map("created_at")
+  updatedAt  DateTime  @updatedAt @map("updated_at")
+
+  userInfo    UserInfo?
+  orders      Order[]
+  auditTrails AuditTrail[]
+
+  @@map("users")
+}
+
+// ─── UserInfo ────────────────────────────────────────────────────────────────
+
+model UserInfo {
+  id           String  @id @default(cuid())
+  firstName    String  @map("first_name") @db.VarChar(50)
+  lastName     String  @map("last_name") @db.VarChar(50)
+  phoneNumber  String? @map("phone_number") @db.VarChar(20)
+  profileImage String? @map("profile_image") @db.VarChar(255)
+
+  userId       String  @unique @map("user_id")
+  user         User    @relation(fields: [userId], references: [id])
+
+  @@map("user_info")
+}
+
+// ─── Order ───────────────────────────────────────────────────────────────────
+
+model Order {
+  id         String   @id @default(cuid())
+  orderDate  DateTime @map("order_date")
+  amount     Decimal  @default(0) @db.Decimal(10, 2)
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  userId     String   @map("user_id")
+  user       User     @relation(fields: [userId], references: [id])
+
+  residentId String   @map("resident_id")
+  resident   Resident @relation(fields: [residentId], references: [id])
+
+  documentId String   @unique @map("document_id")
+  document   Document @relation(fields: [documentId], references: [id])
+
+  @@map("orders")
+}
+
+// ─── Document ────────────────────────────────────────────────────────────────
+
+model Document {
+  id             String   @id @default(cuid())
+  issueDate      DateTime @map("issue_date") @db.Date
+  purpose        String?  @db.VarChar(255)
+  validityPeriod String?  @map("validity_period") @db.VarChar(50)
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  documentTypeId String       @map("document_type_id")
+  documentType   DocumentType @relation(fields: [documentTypeId], references: [id])
+
+  order          Order?
+  signers        DocumentSigner[]
+
+  @@map("documents")
+}
+
+// ─── DocumentType ────────────────────────────────────────────────────────────
+
+model DocumentType {
+  id           String    @id @default(cuid())
+  documentName String    @map("document_name") @db.VarChar(100)
+  amount       Decimal   @default(0) @db.Decimal(10, 2)
+
+  documents    Document[]
+
+  @@map("document_types")
+}
+
+// ─── DocumentSigner ──────────────────────────────────────────────────────────
+
+model DocumentSigner {
+  id              String @id @default(cuid())
+  signerFirstName String @map("signer_first_name") @db.VarChar(50)
+  signerLastName  String @map("signer_last_name") @db.VarChar(50)
+  signerRole      String @map("signer_role") @db.VarChar(50)
+
+  documentId         String           @map("document_id")
+  document           Document         @relation(fields: [documentId], references: [id])
+
+  barangayOfficialId String           @map("barangay_official_id")
+  barangayOfficial   BarangayOfficial @relation(fields: [barangayOfficialId], references: [id])
+
+  @@map("document_signers")
+}
+
+// ─── BarangayOfficial ────────────────────────────────────────────────────────
+
+model BarangayOfficial {
+  id        String @id @default(cuid())
+  firstName String @map("first_name") @db.VarChar(50)
+  lastName  String @map("last_name") @db.VarChar(50)
+  roleType  String @map("role_type") @db.VarChar(50)
+
+  signers   DocumentSigner[]
+
+  @@map("barangay_officials")
+}
+
+// ─── AuditTrail (replaces ActivityLog) ───────────────────────────────────────
+
+model AuditTrail {
+  id         String   @id @default(cuid())
+  tableName  String   @map("table_name") @db.VarChar(50)
+  recordId   String   @map("record_id")
+  actionType String   @map("action_type") @db.VarChar(50)
+  timestamp  DateTime @default(now())
+  fieldName  String?  @map("field_name") @db.VarChar(50)
+  oldValue   String?  @map("old_value") @db.Text
+  newValue   String?  @map("new_value") @db.Text
+
+  userId     String   @map("user_id")
+  user       User     @relation(fields: [userId], references: [id])
+
+  @@map("audit_trails")
+}
+
+// ─── Enums ───────────────────────────────────────────────────────────────────
+
+enum Sex {
+  Male
+  Female
+}
+
+enum ResidentStatus {
+  Alive
+  Deceased
+  MovedOut @map("Moved Out")
+}
