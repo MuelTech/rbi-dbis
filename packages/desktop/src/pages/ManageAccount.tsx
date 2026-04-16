@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Shield, Upload, User, Lock, Phone, Save, CheckCircle, XCircle, Edit } from 'lucide-react';
 import ContentCard from '@/components/ui/ContentCard';
-import { useAuth } from '@/context/AuthContext';
+import { usersService } from '@/services';
 import { User as UserType } from '@/types';
 
 const initialFormState = {
@@ -10,7 +10,7 @@ const initialFormState = {
     username: '',
     password: '',
     phoneNumber: '',
-    status: true, // true = Active, false = Disabled
+    status: true,
     role: 'Admin' as 'Admin' | 'SuperAdmin',
     permission: 'Resident Access' as 'Full Access' | 'Resident Access' | 'Document Access' | 'Resident & Document Access'
 };
@@ -21,7 +21,7 @@ interface ManageAccountProps {
 }
 
 const ManageAccount: React.FC<ManageAccountProps> = ({ onShowSuccess, setIsNavigationBlocked }) => {
-    const { users, addUser, updateUser } = useAuth();
+    const [users, setUsers] = useState<UserType[]>([]);
     const [isEditing, setIsEditing] = useState(false);
     const [editingId, setEditingId] = useState<string | null>(null);
     const formRef = useRef<HTMLDivElement>(null);
@@ -32,7 +32,23 @@ const ManageAccount: React.FC<ManageAccountProps> = ({ onShowSuccess, setIsNavig
 
     const [errors, setErrors] = useState<Record<string, string>>({});
 
-    // Navigation Blocking Logic
+    useEffect(() => {
+        usersService.getAll().then((data: any[]) => {
+            setUsers(data.map((u: any) => ({
+                id: u.id,
+                displayId: u.displayId,
+                firstName: u.userInfo?.firstName ?? '',
+                lastName: u.userInfo?.lastName ?? '',
+                username: u.username,
+                phoneNumber: u.userInfo?.phoneNumber ?? '',
+                role: u.roleType as UserType['role'],
+                permission: (u.permission ?? 'Full Access') as UserType['permission'],
+                lastLogin: u.lastLogin ? new Date(u.lastLogin).toLocaleString() : 'Never',
+                status: u.isActive ? 'Active' : 'Disabled' as UserType['status'],
+            })));
+        }).catch(() => {});
+    }, []);
+
     useEffect(() => {
         if (setIsNavigationBlocked) {
             const isDirty = JSON.stringify(formData) !== JSON.stringify(pristineData);
@@ -104,51 +120,55 @@ const ManageAccount: React.FC<ManageAccountProps> = ({ onShowSuccess, setIsNavig
         return Object.keys(newErrors).length === 0;
     };
 
-    const handleSave = () => {
+    const handleSave = async () => {
         if (!validateForm()) return;
 
-        const statusString = formData.status ? 'Active' : 'Disabled';
-        
-        if (isEditing && editingId) {
-            // Update existing user
-            const userToUpdate: UserType = {
-                id: editingId,
-                firstName: formData.firstName,
-                lastName: formData.lastName,
+        try {
+            const payload: any = {
                 username: formData.username,
-                password: formData.password,
-                phoneNumber: formData.phoneNumber,
-                role: formData.role,
+                roleType: formData.role,
                 permission: formData.permission,
-                status: statusString as 'Active' | 'Disabled',
-                // Preserve lastLogin from existing user
-                lastLogin: users.find(u => u.id === editingId)?.lastLogin
+                isActive: formData.status,
             };
-            updateUser(userToUpdate);
-            setIsEditing(false);
-            setEditingId(null);
-            if (onShowSuccess) onShowSuccess('Account updated successfully');
-        } else {
-            // Add new user
-            const newUser: UserType = {
-                id: String(users.length + 1).padStart(3, '0'),
-                firstName: formData.firstName,
-                lastName: formData.lastName,
-                username: formData.username,
-                password: formData.password,
-                phoneNumber: formData.phoneNumber,
-                role: formData.role,
-                permission: formData.permission,
-                status: statusString as 'Active' | 'Disabled',
-                lastLogin: 'Never'
-            };
-            addUser(newUser);
-            if (onShowSuccess) onShowSuccess('Account created successfully');
-        }
+            if (formData.password) payload.password = formData.password;
 
-        // Reset form
-        setFormData(initialFormState);
-        setPristineData(initialFormState);
+            if (isEditing && editingId) {
+                await usersService.update(editingId, payload);
+                setUsers(prev => prev.map(u => u.id === editingId ? {
+                    ...u,
+                    firstName: formData.firstName,
+                    lastName: formData.lastName,
+                    username: formData.username,
+                    phoneNumber: formData.phoneNumber,
+                    role: formData.role,
+                    permission: formData.permission,
+                    status: formData.status ? 'Active' : 'Disabled' as UserType['status'],
+                } : u));
+                setIsEditing(false);
+                setEditingId(null);
+                if (onShowSuccess) onShowSuccess('Account updated successfully');
+            } else {
+                const created: any = await usersService.create(payload);
+                setUsers(prev => [{
+                    id: created.id,
+                    displayId: created.displayId,
+                    firstName: formData.firstName,
+                    lastName: formData.lastName,
+                    username: formData.username,
+                    phoneNumber: formData.phoneNumber,
+                    role: formData.role,
+                    permission: formData.permission,
+                    status: formData.status ? 'Active' : 'Disabled' as UserType['status'],
+                    lastLogin: 'Never',
+                }, ...prev]);
+                if (onShowSuccess) onShowSuccess('Account created successfully');
+            }
+
+            setFormData(initialFormState);
+            setPristineData(initialFormState);
+        } catch (err: any) {
+            setErrors({ username: err.message ?? 'Save failed' });
+        }
     };
 
     return (
@@ -171,7 +191,7 @@ const ManageAccount: React.FC<ManageAccountProps> = ({ onShowSuccess, setIsNavig
                             </h3>
                             {isEditing && editingId && (
                                 <span className="bg-blue-50 text-blue-600 px-3 py-1 rounded-lg text-xs font-bold">
-                                    Editing: usr_{editingId}
+                                    Editing: {String(users.find(u => u.id === editingId)?.displayId ?? 0).padStart(4, '0')}
                                 </span>
                             )}
                         </div>
@@ -382,7 +402,7 @@ const ManageAccount: React.FC<ManageAccountProps> = ({ onShowSuccess, setIsNavig
                             <table className="w-full border-separate border-spacing-0 table-fixed">
                                 <thead className="bg-white sticky top-0 z-10">
                                     <tr className="border-b border-gray-50">
-                                        <th className="w-[10%] text-left py-4 pl-8 pr-4 text-[12px] font-bold text-blue-500">Username ID</th>
+                                        <th className="w-[10%] text-left py-4 pl-8 pr-4 text-[12px] font-bold text-blue-500">User ID</th>
                                         <th className="w-[15%] text-left py-4 px-4 text-[12px] font-bold text-blue-500">Username</th>
                                         <th className="w-[15%] text-left py-4 px-4 text-[12px] font-bold text-blue-500">Role</th>
                                         <th className="w-[15%] text-left py-4 px-4 text-[12px] font-bold text-blue-500">Permission</th>
@@ -394,7 +414,7 @@ const ManageAccount: React.FC<ManageAccountProps> = ({ onShowSuccess, setIsNavig
                                 <tbody className="divide-y divide-gray-50 bg-white">
                                     {users.map((user) => (
                                         <tr key={user.id} className="hover:bg-gray-50/50 transition-colors">
-                                            <td className="py-4 pl-8 pr-4 text-sm font-medium text-gray-900">{user.id}</td>
+                                            <td className="py-4 pl-8 pr-4 text-sm font-medium text-gray-900">{String(user.displayId ?? 0).padStart(4, '0')}</td>
                                             <td className="py-4 px-4 text-sm font-bold text-gray-800">{user.username}</td>
                                             <td className="py-4 px-4">
                                                 <span className={`inline-flex px-2.5 py-1 rounded-lg text-[11px] font-bold ${

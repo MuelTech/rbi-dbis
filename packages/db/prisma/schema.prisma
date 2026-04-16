@@ -24,6 +24,7 @@ model Block {
 
 model Household {
   id              String   @id @default(cuid())
+  displayId       Int      @unique @default(autoincrement()) @map("display_id")
   brgyHouseholdNo String   @map("brgy_household_no") @db.VarChar(50)
   createdAt       DateTime @default(now()) @map("created_at")
   updatedAt       DateTime @updatedAt @map("updated_at")
@@ -40,6 +41,7 @@ model Household {
 
 model Family {
   id          String   @id @default(cuid())
+  displayId   Int      @unique @default(autoincrement()) @map("display_id")
   familyName  String   @map("family_name") @db.VarChar(100)
   isArchived  Boolean  @default(false) @map("is_archived")
   createdAt   DateTime @default(now()) @map("created_at")
@@ -123,6 +125,7 @@ model Address {
 
 model Resident {
   id             String         @id @default(cuid())
+  displayId      Int            @unique @default(autoincrement()) @map("display_id")
   lastName       String         @map("last_name") @db.VarChar(50)
   firstName      String         @map("first_name") @db.VarChar(50)
   middleName     String?        @map("middle_name") @db.VarChar(50)
@@ -170,6 +173,7 @@ model Record {
 
 model User {
   id         String    @id @default(cuid())
+  displayId  Int       @unique @default(autoincrement()) @map("display_id")
   username   String    @unique @db.VarChar(50)
   password   String    @db.VarChar(255)
   roleType   String    @map("role_type") @db.VarChar(50)
@@ -205,6 +209,7 @@ model UserInfo {
 
 model Order {
   id         String   @id @default(cuid())
+  displayId  Int      @unique @default(autoincrement()) @map("display_id")
   orderDate  DateTime @map("order_date")
   amount     Decimal  @default(0) @db.Decimal(10, 2)
   createdAt  DateTime @default(now()) @map("created_at")
@@ -225,6 +230,7 @@ model Order {
 
 model Document {
   id             String   @id @default(cuid())
+  displayId      Int      @unique @default(autoincrement()) @map("display_id")
   issueDate      DateTime @map("issue_date") @db.Date
   purpose        String?  @db.VarChar(255)
   validityPeriod String?  @map("validity_period") @db.VarChar(50)

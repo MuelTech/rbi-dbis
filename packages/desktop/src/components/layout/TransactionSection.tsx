@@ -7,45 +7,45 @@ const MOCK_DATA = {
     accumulatedFee: '₱3,212',
     totalTransactions: 31,
     transactions: [
-      { id: '001', dateIssued: '16/06/2025', personnel: 'Nayeon', resident: 'Maria Santos', type: 'Barangay Clearance', fee: 200 },
-      { id: '002', dateIssued: '16/06/2025', personnel: 'Nayeon', resident: 'Aries Castanas', type: 'Certificate of Indigency', fee: 200 },
-      { id: '003', dateIssued: '16/06/2025', personnel: 'Nayeon', resident: 'Arwind Jae Mendoza', type: 'Certificate of Residency', fee: 200 },
-      { id: '004', dateIssued: '16/06/2025', personnel: 'Nayeon', resident: 'Matt Dwayne Gagarin', type: 'Certificate of First Time Job Seeker', fee: 200 },
-      { id: '005', dateIssued: '16/06/2025', personnel: 'Nayeon', resident: 'John Lemuel Teano', type: 'Business Permit', fee: 200 },
-      { id: '006', dateIssued: '16/06/2025', personnel: 'Nayeon', resident: 'Minatozaki Sana', type: 'Certificate of No Income', fee: 200 },
-      { id: '007', dateIssued: '16/06/2025', personnel: 'Nayeon', resident: 'Mitsubishi Haduken', type: 'Certificate of Live Birth', fee: 200 },
-      { id: '008', dateIssued: '16/06/2025', personnel: 'Nayeon', resident: 'Jennie Kim', type: 'Barangay Indigency', fee: 200 },
+      { id: '001', displayId: 1, dateIssued: '16/06/2025', personnel: 'Nayeon', resident: 'Maria Santos', type: 'Barangay Clearance', fee: 200 },
+      { id: '002', displayId: 2, dateIssued: '16/06/2025', personnel: 'Nayeon', resident: 'Aries Castanas', type: 'Certificate of Indigency', fee: 200 },
+      { id: '003', displayId: 3, dateIssued: '16/06/2025', personnel: 'Nayeon', resident: 'Arwind Jae Mendoza', type: 'Certificate of Residency', fee: 200 },
+      { id: '004', displayId: 4, dateIssued: '16/06/2025', personnel: 'Nayeon', resident: 'Matt Dwayne Gagarin', type: 'Certificate of First Time Job Seeker', fee: 200 },
+      { id: '005', displayId: 5, dateIssued: '16/06/2025', personnel: 'Nayeon', resident: 'John Lemuel Teano', type: 'Business Permit', fee: 200 },
+      { id: '006', displayId: 6, dateIssued: '16/06/2025', personnel: 'Nayeon', resident: 'Minatozaki Sana', type: 'Certificate of No Income', fee: 200 },
+      { id: '007', displayId: 7, dateIssued: '16/06/2025', personnel: 'Nayeon', resident: 'Mitsubishi Haduken', type: 'Certificate of Live Birth', fee: 200 },
+      { id: '008', displayId: 8, dateIssued: '16/06/2025', personnel: 'Nayeon', resident: 'Jennie Kim', type: 'Barangay Indigency', fee: 200 },
     ]
   },
   'Week': {
     accumulatedFee: '₱15,450',
     totalTransactions: 142,
     transactions: [
-      { id: '009', dateIssued: '15/06/2025', personnel: 'Sana', resident: 'Kim Dahyun', type: 'Barangay Clearance', fee: 200 },
-      { id: '010', dateIssued: '14/06/2025', personnel: 'Sana', resident: 'Chou Tzuyu', type: 'Business Permit', fee: 500 },
-      { id: '011', dateIssued: '13/06/2025', personnel: 'Nayeon', resident: 'Park Jihyo', type: 'Certificate of Residency', fee: 200 },
-      { id: '012', dateIssued: '12/06/2025', personnel: 'Sana', resident: 'Hirai Momo', type: 'Barangay Indigency', fee: 0 },
-      { id: '013', dateIssued: '11/06/2025', personnel: 'Nayeon', resident: 'Yoo Jeongyeon', type: 'Certificate of Live Birth', fee: 200 },
-      { id: '014', dateIssued: '10/06/2025', personnel: 'Sana', resident: 'Son Chaeyoung', type: 'Certificate of No Income', fee: 200 },
+      { id: '009', displayId: 9, dateIssued: '15/06/2025', personnel: 'Sana', resident: 'Kim Dahyun', type: 'Barangay Clearance', fee: 200 },
+      { id: '010', displayId: 10, dateIssued: '14/06/2025', personnel: 'Sana', resident: 'Chou Tzuyu', type: 'Business Permit', fee: 500 },
+      { id: '011', displayId: 11, dateIssued: '13/06/2025', personnel: 'Nayeon', resident: 'Park Jihyo', type: 'Certificate of Residency', fee: 200 },
+      { id: '012', displayId: 12, dateIssued: '12/06/2025', personnel: 'Sana', resident: 'Hirai Momo', type: 'Barangay Indigency', fee: 0 },
+      { id: '013', displayId: 13, dateIssued: '11/06/2025', personnel: 'Nayeon', resident: 'Yoo Jeongyeon', type: 'Certificate of Live Birth', fee: 200 },
+      { id: '014', displayId: 14, dateIssued: '10/06/2025', personnel: 'Sana', resident: 'Son Chaeyoung', type: 'Certificate of No Income', fee: 200 },
     ]
   },
   'Month': {
     accumulatedFee: '₱68,900',
     totalTransactions: 523,
     transactions: [
-      { id: '015', dateIssued: '01/06/2025', personnel: 'Nayeon', resident: 'Im Nayeon', type: 'Business Permit', fee: 1000 },
-      { id: '016', dateIssued: '05/06/2025', personnel: 'Sana', resident: 'Myoui Mina', type: 'Barangay Clearance', fee: 200 },
-      { id: '017', dateIssued: '10/06/2025', personnel: 'Nayeon', resident: 'Kim Jisoo', type: 'Certificate of Residency', fee: 200 },
-      { id: '018', dateIssued: '15/06/2025', personnel: 'Sana', resident: 'Lalisa Manobal', type: 'Certificate of Indigency', fee: 0 },
-      { id: '019', dateIssued: '20/06/2025', personnel: 'Nayeon', resident: 'Roseanne Park', type: 'Certificate of First Time Job Seeker', fee: 0 },
+      { id: '015', displayId: 15, dateIssued: '01/06/2025', personnel: 'Nayeon', resident: 'Im Nayeon', type: 'Business Permit', fee: 1000 },
+      { id: '016', displayId: 16, dateIssued: '05/06/2025', personnel: 'Sana', resident: 'Myoui Mina', type: 'Barangay Clearance', fee: 200 },
+      { id: '017', displayId: 17, dateIssued: '10/06/2025', personnel: 'Nayeon', resident: 'Kim Jisoo', type: 'Certificate of Residency', fee: 200 },
+      { id: '018', displayId: 18, dateIssued: '15/06/2025', personnel: 'Sana', resident: 'Lalisa Manobal', type: 'Certificate of Indigency', fee: 0 },
+      { id: '019', displayId: 19, dateIssued: '20/06/2025', personnel: 'Nayeon', resident: 'Roseanne Park', type: 'Certificate of First Time Job Seeker', fee: 0 },
     ]
   },
   'Custom': {
     accumulatedFee: '₱5,100',
     totalTransactions: 45,
     transactions: [
-       { id: '020', dateIssued: '20/06/2025', personnel: 'Nayeon', resident: 'Custom Range User 1', type: 'Barangay Clearance', fee: 200 },
-       { id: '021', dateIssued: '21/06/2025', personnel: 'Sana', resident: 'Custom Range User 2', type: 'Business Permit', fee: 500 },
+       { id: '020', displayId: 20, dateIssued: '20/06/2025', personnel: 'Nayeon', resident: 'Custom Range User 1', type: 'Barangay Clearance', fee: 200 },
+       { id: '021', displayId: 21, dateIssued: '21/06/2025', personnel: 'Sana', resident: 'Custom Range User 2', type: 'Business Permit', fee: 500 },
     ]
   }
 };
@@ -322,7 +322,7 @@ const TransactionSection: React.FC = () => {
               <tbody>
                 {paginatedTransactions.map((t) => (
                   <tr key={t.id} className="border-b border-gray-50 last:border-none hover:bg-gray-50 transition-colors group" style={{ height: `${rowHeight}px` }}>
-                    <td className="px-3 xl:px-4 text-[11px] xl:text-[13px] text-gray-600 font-medium truncate">{t.id}</td>
+                    <td className="px-3 xl:px-4 text-[11px] xl:text-[13px] text-gray-600 font-medium truncate">{'ORD-' + String(t.displayId ?? 0).padStart(6, '0')}</td>
                     <td className="px-3 xl:px-4 text-[11px] xl:text-[13px] text-gray-600 truncate">{t.dateIssued}</td>
                     <td className="px-3 xl:px-4 text-[11px] xl:text-[13px] text-gray-600 truncate">{t.personnel}</td>
                     <td className="px-3 xl:px-4 text-[11px] xl:text-[13px] text-gray-600 truncate">{t.resident}</td>

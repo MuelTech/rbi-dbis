@@ -11,13 +11,15 @@ interface FamilyListModalProps {
 
 interface FamilyData {
     id: string;
+    displayId: number;
     familyName: string;
     residentCount: number;
     voterCount: number;
 }
 
 const MOCK_FAMILIES: FamilyData[] = Array.from({ length: 15 }, (_, i) => ({
-    id: `00${i + 1}`.slice(-3),
+    id: `fam-mock-${i + 1}`,
+    displayId: i + 1,
     familyName: ['Dela Cruz', 'Santos', 'Reyes', 'Garcia', 'Mendoza', 'Bautista', 'Ocampo', 'Gonzales', 'Lopez', 'Sy'][i % 10],
     residentCount: Math.floor(Math.random() * 6) + 2,
     voterCount: Math.floor(Math.random() * 4),
@@ -124,7 +126,7 @@ const FamilyListModal: React.FC<FamilyListModalProps> = ({ isOpen, onClose, hous
                             <tbody className="divide-y divide-gray-50">
                                 {currentItems.map((family) => (
                                     <tr key={family.id} className="hover:bg-gray-50/50 transition-colors">
-                                        <td className="py-4 pl-8 pr-4 text-[14px] font-bold text-gray-900">{family.id}</td>
+                                        <td className="py-4 pl-8 pr-4 text-[14px] font-bold text-gray-900">{String(family.displayId ?? 0).padStart(4, '0')}</td>
                                         <td className="py-4 px-4 text-[14px] font-medium text-gray-700">{family.familyName}</td>
                                         <td className="py-4 px-4 text-[14px] text-gray-600">{family.residentCount}</td>
                                         <td className="py-4 px-4 text-[14px] text-gray-600">{family.voterCount}</td>

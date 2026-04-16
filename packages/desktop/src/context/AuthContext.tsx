@@ -1,82 +1,109 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { User } from '../types';
 import { useNavigate } from 'react-router-dom';
+import { authService, type AuthUser } from '../services/auth';
 
 interface AuthContextType {
   user: User | null;
-  users: User[];
   login: (username: string, password: string) => Promise<boolean>;
   logout: () => void;
-  addUser: (user: User) => void;
-  updateUser: (user: User) => void;
-  deleteUser: (id: string) => void;
+  /** Exposed so ManageAccount and other CRUD pages can still operate on users lists via their own service calls */
+  refreshUser: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Initial mock data
-const initialUsersData: User[] = [
-    { id: '001', firstName: 'Admin', lastName: 'User', username: 'admin', password: 'password123', phoneNumber: '0912-345-6789', role: 'SuperAdmin', permission: 'Full Access', lastLogin: '10/24/2024 09:30 AM', status: 'Active' },
-    { id: '002', firstName: 'John', lastName: 'Doe', username: 'johndoe', password: 'password123', phoneNumber: '0912-345-6789', role: 'Admin', permission: 'Document Access', lastLogin: '10/23/2024 04:15 PM', status: 'Active' },
-    { id: '003', firstName: 'Jane', lastName: 'Smith', username: 'janesmith', password: 'password123', phoneNumber: '0912-345-6789', role: 'Admin', permission: 'Resident Access', lastLogin: '10/20/2024 11:00 AM', status: 'Disabled' },
-];
+function mapAuthUser(au: AuthUser): User {
+  return {
+    id: au.id,
+    displayId: au.displayId,
+    firstName: au.firstName,
+    lastName: au.lastName,
+    username: au.username,
+    phoneNumber: au.phoneNumber,
+    profileImage: au.profileImage,
+    role: au.roleType as User['role'],
+    roleType: au.roleType,
+    permission: (au.permission ?? 'Full Access') as User['permission'],
+    lastLogin: au.lastLogin ?? undefined,
+    status: au.isActive ? 'Active' : 'Disabled',
+    isActive: au.isActive,
+  };
+}
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
-  const [users, setUsers] = useState<User[]>(initialUsersData);
+  const [initializing, setInitializing] = useState(true);
   const navigate = useNavigate();
 
-  const login = async (username: string, password: string) => {
-    const foundUser = users.find(u => u.username === username && u.password === password);
-    if (foundUser) {
-      if (foundUser.status === 'Disabled') {
-        alert('Your account is disabled. Please contact the administrator.');
-        return false;
-      }
-      // Update last login
-      const updatedUser = { ...foundUser, lastLogin: new Date().toLocaleString() };
-      const updatedUsers = users.map(u => u.id === foundUser.id ? updatedUser : u);
-      setUsers(updatedUsers);
-      setUser(updatedUser);
-      localStorage.setItem('currentUser', JSON.stringify(updatedUser));
-      return true;
-    }
-    return false;
-  };
-
-  const logout = () => {
+  const logout = useCallback(() => {
     setUser(null);
+    localStorage.removeItem('authToken');
     localStorage.removeItem('currentUser');
     navigate('/login');
-  };
+  }, [navigate]);
 
-  const addUser = (newUser: User) => {
-    setUsers([...users, newUser]);
-  };
+  const refreshUser = useCallback(async () => {
+    const token = localStorage.getItem('authToken');
+    if (!token) {
+      setUser(null);
+      return;
+    }
+    try {
+      const au = await authService.me();
+      const mapped = mapAuthUser(au);
+      setUser(mapped);
+      localStorage.setItem('currentUser', JSON.stringify(mapped));
+    } catch {
+      logout();
+    }
+  }, [logout]);
 
-  const updateUser = (updatedUser: User) => {
-    setUsers(users.map(u => u.id === updatedUser.id ? updatedUser : u));
-    // If updating current user, update state
-    if (user && user.id === updatedUser.id) {
-        setUser(updatedUser);
-        localStorage.setItem('currentUser', JSON.stringify(updatedUser));
+  const login = async (username: string, password: string): Promise<boolean> => {
+    try {
+      const { token, user: au } = await authService.login(username, password);
+      localStorage.setItem('authToken', token);
+      const mapped = mapAuthUser(au);
+      setUser(mapped);
+      localStorage.setItem('currentUser', JSON.stringify(mapped));
+      return true;
+    } catch (err: any) {
+      const msg: string = err?.message ?? '';
+      if (msg.includes('disabled') || msg.includes('Disabled')) {
+        alert('Your account is disabled. Please contact the administrator.');
+      }
+      return false;
     }
   };
 
-  const deleteUser = (id: string) => {
-    setUsers(users.filter(u => u.id !== id));
-  };
-
-  // Restore session
   useEffect(() => {
-    const storedUser = localStorage.getItem('currentUser');
-    if (storedUser) {
-      setUser(JSON.parse(storedUser));
+    const token = localStorage.getItem('authToken');
+    if (token) {
+      authService
+        .me()
+        .then((au) => {
+          const mapped = mapAuthUser(au);
+          setUser(mapped);
+          localStorage.setItem('currentUser', JSON.stringify(mapped));
+        })
+        .catch(() => {
+          localStorage.removeItem('authToken');
+          localStorage.removeItem('currentUser');
+        })
+        .finally(() => setInitializing(false));
+    } else {
+      const stored = localStorage.getItem('currentUser');
+      if (stored) {
+        localStorage.removeItem('currentUser');
+      }
+      setInitializing(false);
     }
   }, []);
 
+  if (initializing) return null;
+
   return (
-    <AuthContext.Provider value={{ user, users, login, logout, addUser, updateUser, deleteUser }}>
+    <AuthContext.Provider value={{ user, login, logout, refreshUser }}>
       {children}
     </AuthContext.Provider>
   );

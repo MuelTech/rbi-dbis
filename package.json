@@ -12,6 +12,7 @@
     "build:desktop": "pnpm --filter @rbi/desktop build",
     "db:migrate": "pnpm --filter @rbi/db exec prisma migrate dev",
     "db:generate": "pnpm --filter @rbi/db exec prisma generate",
-    "db:studio": "pnpm --filter @rbi/db exec prisma studio"
+    "db:studio": "pnpm --filter @rbi/db exec prisma studio",
+    "db:seed": "pnpm --filter @rbi/db db:seed"
   }
 }

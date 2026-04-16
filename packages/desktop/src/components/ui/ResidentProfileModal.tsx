@@ -189,7 +189,7 @@ const ResidentProfileModal: React.FC<ResidentProfileModalProps> = ({ isOpen, onC
                                     <div>
                                         <h3 className="text-xl font-bold text-gray-900">{formData.firstName} {formData.lastName}</h3>
                                         <div className="flex items-center gap-3 mt-2 text-[13px]">
-                                            <span className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded border border-gray-200 font-medium">ID: RES-{formData.id}</span>
+                                            <span className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded border border-gray-200 font-medium">ID: {String(formData.displayId ?? 0).padStart(4, '0')}</span>
                                             <span className="text-gray-500 flex items-center gap-1">
                                                 <span className="text-blue-500 font-medium">FAMILY HEAD:</span> Dela Cruz, Juan Sr.
                                             </span>

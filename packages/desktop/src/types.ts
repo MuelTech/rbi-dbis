@@ -3,15 +3,19 @@ import { LucideIcon } from 'lucide-react';
 
 export interface User {
   id: string;
+  displayId?: number;
   firstName: string;
   lastName: string;
   username: string;
   password?: string;
   phoneNumber?: string;
+  profileImage?: string | null;
   role: 'SuperAdmin' | 'Admin';
+  roleType?: string;
   permission: 'Full Access' | 'Resident Access' | 'Document Access' | 'Resident & Document Access';
   lastLogin?: string;
   status: 'Active' | 'Disabled';
+  isActive?: boolean;
 }
 
 export interface StatCardProps {
@@ -24,6 +28,7 @@ export interface StatCardProps {
 
 export interface Transaction {
   id: string;
+  displayId?: number;
   dateIssued: string;
   personnel: string;
   resident: string;
@@ -33,6 +38,7 @@ export interface Transaction {
 
 export interface Resident {
   id: string; // resident_id
+  displayId?: number;
   lastName: string; // last_name
   firstName: string; // first_name
   middleName?: string; // middle_name

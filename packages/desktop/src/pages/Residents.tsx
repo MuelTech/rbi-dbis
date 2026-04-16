@@ -8,38 +8,38 @@ import BatchImportModal from '@/components/ui/BatchImportModal';
 import SuccessToast from '@/components/ui/SuccessToast';
 
 const residentsData: Resident[] = [
-    { id: '001', lastName: 'Teano', firstName: 'John Lemuel', sex: 'Male', age: 23, voter: 'Yes', status: 'Active' },
-    { id: '002', lastName: 'Castanas', firstName: 'Aries', sex: 'Male', age: 23, voter: 'No', status: 'Deceased' },
-    { id: '003', lastName: 'Mendoza', firstName: 'Arwind Jae', sex: 'Male', age: 23, voter: 'Yes', status: 'Active' },
-    { id: '004', lastName: 'Santiago', firstName: 'Jonathan', sex: 'Male', age: 23, voter: 'Yes', status: 'Active' },
-    { id: '005', lastName: 'Nayeon', firstName: 'Mah Lab', sex: 'Male', age: 23, voter: 'Yes', status: 'Move out' },
-    { id: '006', lastName: 'Rizal', firstName: 'Jose', sex: 'Male', age: 23, voter: 'Yes', status: 'Active' },
-    { id: '007', lastName: 'Kapre', firstName: 'Johnny', sex: 'Male', age: 23, voter: 'Yes', status: 'Active' },
-    { id: '008', lastName: 'Aswang', firstName: 'Sofia', sex: 'Male', age: 23, voter: 'Yes', status: 'Active' },
-    { id: '009', lastName: 'Tikbalang', firstName: 'Tralelu', sex: 'Male', age: 23, voter: 'Yes', status: 'Active' },
-    { id: '010', lastName: 'Haduken', firstName: 'Key Oh', sex: 'Male', age: 23, voter: 'Yes', status: 'Active' },
-    { id: '011', lastName: 'Manalo', firstName: 'Jose', sex: 'Male', age: 45, voter: 'Yes', status: 'Active' },
-    { id: '012', lastName: 'Cruz', firstName: 'Maria', sex: 'Female', age: 32, voter: 'Yes', status: 'Active' },
-    { id: '013', lastName: 'Garcia', firstName: 'Julia', sex: 'Female', age: 28, voter: 'Yes', status: 'Active' },
-    { id: '014', lastName: 'Reyes', firstName: 'Mark', sex: 'Male', age: 34, voter: 'Yes', status: 'Active' },
-    { id: '015', lastName: 'Santos', firstName: 'Ana', sex: 'Female', age: 22, voter: 'Yes', status: 'Active' },
-    { id: '016', lastName: 'Dizon', firstName: 'Paul', sex: 'Male', age: 45, voter: 'Yes', status: 'Active' },
-    { id: '017', lastName: 'Ocampo', firstName: 'Sarah', sex: 'Female', age: 31, voter: 'Yes', status: 'Active' },
-    { id: '018', lastName: 'Pascual', firstName: 'Ryan', sex: 'Male', age: 29, voter: 'No', status: 'Active' },
-    { id: '019', lastName: 'Torres', firstName: 'Kim', sex: 'Female', age: 26, voter: 'Yes', status: 'Active' },
-    { id: '020', lastName: 'Flores', firstName: 'Ian', sex: 'Male', age: 33, voter: 'Yes', status: 'Active' },
-    { id: '021', lastName: 'Lim', firstName: 'Carla', sex: 'Female', age: 27, voter: 'Yes', status: 'Active' },
-    { id: '022', lastName: 'Tan', firstName: 'David', sex: 'Male', age: 40, voter: 'Yes', status: 'Active' },
-    { id: '023', lastName: 'Yap', firstName: 'Elena', sex: 'Female', age: 35, voter: 'Yes', status: 'Active' },
-    { id: '024', lastName: 'Go', firstName: 'Kevin', sex: 'Male', age: 24, voter: 'No', status: 'Active' },
-    { id: '025', lastName: 'Sy', firstName: 'Rachel', sex: 'Female', age: 29, voter: 'Yes', status: 'Active' },
-    { id: '026', lastName: 'Lee', firstName: 'Michael', sex: 'Male', age: 31, voter: 'Yes', status: 'Active' },
-    { id: '027', lastName: 'Chua', firstName: 'Jenny', sex: 'Female', age: 25, voter: 'Yes', status: 'Active' },
-    { id: '028', lastName: 'Bautista', firstName: 'Chris', sex: 'Male', age: 38, voter: 'Yes', status: 'Active' },
-    { id: '029', lastName: 'Gonzales', firstName: 'Bea', sex: 'Female', age: 21, voter: 'Yes', status: 'Move out' },
-    { id: '030', lastName: 'Villanueva', firstName: 'Tom', sex: 'Male', age: 42, voter: 'Yes', status: 'Active' },
-    { id: '031', lastName: 'Castro', firstName: 'Liza', sex: 'Female', age: 30, voter: 'Yes', status: 'Active' },
-    { id: '032', lastName: 'Rivera', firstName: 'Dan', sex: 'Male', age: 27, voter: 'No', status: 'Active' },
+    { id: '001', displayId: 1, lastName: 'Teano', firstName: 'John Lemuel', sex: 'Male', age: 23, voter: 'Yes', status: 'Active' },
+    { id: '002', displayId: 2, lastName: 'Castanas', firstName: 'Aries', sex: 'Male', age: 23, voter: 'No', status: 'Deceased' },
+    { id: '003', displayId: 3, lastName: 'Mendoza', firstName: 'Arwind Jae', sex: 'Male', age: 23, voter: 'Yes', status: 'Active' },
+    { id: '004', displayId: 4, lastName: 'Santiago', firstName: 'Jonathan', sex: 'Male', age: 23, voter: 'Yes', status: 'Active' },
+    { id: '005', displayId: 5, lastName: 'Nayeon', firstName: 'Mah Lab', sex: 'Male', age: 23, voter: 'Yes', status: 'Move out' },
+    { id: '006', displayId: 6, lastName: 'Rizal', firstName: 'Jose', sex: 'Male', age: 23, voter: 'Yes', status: 'Active' },
+    { id: '007', displayId: 7, lastName: 'Kapre', firstName: 'Johnny', sex: 'Male', age: 23, voter: 'Yes', status: 'Active' },
+    { id: '008', displayId: 8, lastName: 'Aswang', firstName: 'Sofia', sex: 'Male', age: 23, voter: 'Yes', status: 'Active' },
+    { id: '009', displayId: 9, lastName: 'Tikbalang', firstName: 'Tralelu', sex: 'Male', age: 23, voter: 'Yes', status: 'Active' },
+    { id: '010', displayId: 10, lastName: 'Haduken', firstName: 'Key Oh', sex: 'Male', age: 23, voter: 'Yes', status: 'Active' },
+    { id: '011', displayId: 11, lastName: 'Manalo', firstName: 'Jose', sex: 'Male', age: 45, voter: 'Yes', status: 'Active' },
+    { id: '012', displayId: 12, lastName: 'Cruz', firstName: 'Maria', sex: 'Female', age: 32, voter: 'Yes', status: 'Active' },
+    { id: '013', displayId: 13, lastName: 'Garcia', firstName: 'Julia', sex: 'Female', age: 28, voter: 'Yes', status: 'Active' },
+    { id: '014', displayId: 14, lastName: 'Reyes', firstName: 'Mark', sex: 'Male', age: 34, voter: 'Yes', status: 'Active' },
+    { id: '015', displayId: 15, lastName: 'Santos', firstName: 'Ana', sex: 'Female', age: 22, voter: 'Yes', status: 'Active' },
+    { id: '016', displayId: 16, lastName: 'Dizon', firstName: 'Paul', sex: 'Male', age: 45, voter: 'Yes', status: 'Active' },
+    { id: '017', displayId: 17, lastName: 'Ocampo', firstName: 'Sarah', sex: 'Female', age: 31, voter: 'Yes', status: 'Active' },
+    { id: '018', displayId: 18, lastName: 'Pascual', firstName: 'Ryan', sex: 'Male', age: 29, voter: 'No', status: 'Active' },
+    { id: '019', displayId: 19, lastName: 'Torres', firstName: 'Kim', sex: 'Female', age: 26, voter: 'Yes', status: 'Active' },
+    { id: '020', displayId: 20, lastName: 'Flores', firstName: 'Ian', sex: 'Male', age: 33, voter: 'Yes', status: 'Active' },
+    { id: '021', displayId: 21, lastName: 'Lim', firstName: 'Carla', sex: 'Female', age: 27, voter: 'Yes', status: 'Active' },
+    { id: '022', displayId: 22, lastName: 'Tan', firstName: 'David', sex: 'Male', age: 40, voter: 'Yes', status: 'Active' },
+    { id: '023', displayId: 23, lastName: 'Yap', firstName: 'Elena', sex: 'Female', age: 35, voter: 'Yes', status: 'Active' },
+    { id: '024', displayId: 24, lastName: 'Go', firstName: 'Kevin', sex: 'Male', age: 24, voter: 'No', status: 'Active' },
+    { id: '025', displayId: 25, lastName: 'Sy', firstName: 'Rachel', sex: 'Female', age: 29, voter: 'Yes', status: 'Active' },
+    { id: '026', displayId: 26, lastName: 'Lee', firstName: 'Michael', sex: 'Male', age: 31, voter: 'Yes', status: 'Active' },
+    { id: '027', displayId: 27, lastName: 'Chua', firstName: 'Jenny', sex: 'Female', age: 25, voter: 'Yes', status: 'Active' },
+    { id: '028', displayId: 28, lastName: 'Bautista', firstName: 'Chris', sex: 'Male', age: 38, voter: 'Yes', status: 'Active' },
+    { id: '029', displayId: 29, lastName: 'Gonzales', firstName: 'Bea', sex: 'Female', age: 21, voter: 'Yes', status: 'Move out' },
+    { id: '030', displayId: 30, lastName: 'Villanueva', firstName: 'Tom', sex: 'Male', age: 42, voter: 'Yes', status: 'Active' },
+    { id: '031', displayId: 31, lastName: 'Castro', firstName: 'Liza', sex: 'Female', age: 30, voter: 'Yes', status: 'Active' },
+    { id: '032', displayId: 32, lastName: 'Rivera', firstName: 'Dan', sex: 'Male', age: 27, voter: 'No', status: 'Active' },
 ];
 
 
@@ -545,7 +545,7 @@ const Residents: React.FC<ResidentsProps> = ({ setIsNavigationBlocked, onShowSuc
                     <tbody className="bg-white">
                         {currentItems.map((resident) => (
                             <tr key={resident.id} className="hover:bg-gray-50/50 transition-colors" style={{ height: `${rowHeight}px` }}>
-                                <td className="pl-8 pr-4 text-[14px] text-gray-900 font-bold truncate">{resident.id}</td>
+                                <td className="pl-8 pr-4 text-[14px] text-gray-900 font-bold truncate">{String(resident.displayId ?? 0).padStart(4, '0')}</td>
                                 <td className="px-4 text-[14px] text-gray-700 font-medium truncate">{resident.lastName}</td>
                                 <td className="px-4 text-[14px] text-gray-700 font-medium truncate">{resident.firstName}</td>
                                 <td className="px-4 text-[14px] text-gray-600 truncate">{resident.sex}</td>

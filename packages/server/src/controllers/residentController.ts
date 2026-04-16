@@ -40,7 +40,10 @@ export async function createResident(
   next: NextFunction
 ) {
   try {
-    const resident = await prisma.resident.create({ data: req.body });
+    const data = { ...req.body };
+    delete data.displayId;
+    delete data.display_id;
+    const resident = await prisma.resident.create({ data });
     res.status(201).json(resident);
   } catch (err) {
     next(err);
@@ -53,9 +56,12 @@ export async function updateResident(
   next: NextFunction
 ) {
   try {
+    const data = { ...req.body };
+    delete data.displayId;
+    delete data.display_id;
     const resident = await prisma.resident.update({
       where: { id: req.params.id },
-      data: req.body,
+      data,
     });
     res.json(resident);
   } catch (err) {

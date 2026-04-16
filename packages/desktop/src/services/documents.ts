@@ -2,6 +2,7 @@ import { api } from "./api";
 
 export interface DocumentRecord {
   id: string;
+  displayId?: number;
   type: string;
   dateIssued: string;
   personnel: string;

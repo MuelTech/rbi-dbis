@@ -2,6 +2,7 @@ import { api } from "./api";
 
 export interface Household {
   id: string;
+  displayId?: number;
   name: string;
   address?: string;
   members?: unknown[];

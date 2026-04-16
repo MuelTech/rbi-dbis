@@ -5,23 +5,23 @@ import FamilyViewModal from '@/components/ui/FamilyViewModal';
 
 interface ArchivedFamily {
     id: string;
+    displayId: number;
     residents: number;
     voters: number;
     status: 'Moveout' | 'Deceased';
 }
 
 const MOCK_ARCHIVED: ArchivedFamily[] = [
-    { id: '011', residents: 7, voters: 4, status: 'Moveout' },
-    { id: '012', residents: 2, voters: 1, status: 'Moveout' },
-    { id: '013', residents: 4, voters: 3, status: 'Deceased' },
-    { id: '014', residents: 3, voters: 2, status: 'Moveout' },
-    { id: '015', residents: 1, voters: 0, status: 'Deceased' },
-    // Add more mock data to test pagination if needed
-    { id: '016', residents: 5, voters: 2, status: 'Moveout' },
-    { id: '017', residents: 2, voters: 2, status: 'Deceased' },
-    { id: '018', residents: 6, voters: 4, status: 'Moveout' },
-    { id: '019', residents: 3, voters: 1, status: 'Deceased' },
-    { id: '020', residents: 4, voters: 2, status: 'Moveout' },
+    { id: '011', displayId: 11, residents: 7, voters: 4, status: 'Moveout' },
+    { id: '012', displayId: 12, residents: 2, voters: 1, status: 'Moveout' },
+    { id: '013', displayId: 13, residents: 4, voters: 3, status: 'Deceased' },
+    { id: '014', displayId: 14, residents: 3, voters: 2, status: 'Moveout' },
+    { id: '015', displayId: 15, residents: 1, voters: 0, status: 'Deceased' },
+    { id: '016', displayId: 16, residents: 5, voters: 2, status: 'Moveout' },
+    { id: '017', displayId: 17, residents: 2, voters: 2, status: 'Deceased' },
+    { id: '018', displayId: 18, residents: 6, voters: 4, status: 'Moveout' },
+    { id: '019', displayId: 19, residents: 3, voters: 1, status: 'Deceased' },
+    { id: '020', displayId: 20, residents: 4, voters: 2, status: 'Moveout' },
 ];
 
 const Archived: React.FC = () => {
@@ -121,7 +121,7 @@ const Archived: React.FC = () => {
                             <tbody className="divide-y divide-gray-50">
                                 {currentItems.map((item) => (
                                     <tr key={item.id} className="hover:bg-gray-50/50 transition-colors" style={{ height: `${rowHeight}px` }}>
-                                        <td className="pl-8 pr-4 text-[14px] font-bold text-gray-900 truncate">{item.id}</td>
+                                        <td className="pl-8 pr-4 text-[14px] font-bold text-gray-900 truncate">{String(item.displayId ?? 0).padStart(4, '0')}</td>
                                         <td className="px-4 text-[14px] text-gray-600 truncate">{item.residents}</td>
                                         <td className="px-4 text-[14px] text-gray-600 truncate">{item.voters}</td>
                                         <td className="px-4 text-[14px] text-gray-600 truncate">{item.status}</td>

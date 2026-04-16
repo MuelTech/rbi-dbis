@@ -5,6 +5,7 @@ import FamilyListModal from '@/components/ui/FamilyListModal';
 
 interface HouseholdData {
     id: string;
+    displayId: number;
     block: string;
     familyCount: number;
     voterCount: number;
@@ -14,15 +15,20 @@ interface HouseholdData {
 
 const BLOCKS = ['Block 1', 'Block 2', 'Block 3'];
 
+let _seq = 0;
 const householdData: HouseholdData[] = BLOCKS.flatMap(block => 
-    Array.from({ length: 50 }, (_, i) => ({
-        id: `HH-${(i + 1).toString().padStart(3, '0')}`,
-        block: block,
-        familyCount: Math.floor(Math.random() * 6) + 1,
-        voterCount: Math.floor(Math.random() * 4) + 1,
-        catCount: Math.floor(Math.random() * 5),
-        dogCount: Math.floor(Math.random() * 3),
-    }))
+    Array.from({ length: 50 }, () => {
+        _seq++;
+        return {
+            id: `hh-mock-${_seq}`,
+            displayId: _seq,
+            block: block,
+            familyCount: Math.floor(Math.random() * 6) + 1,
+            voterCount: Math.floor(Math.random() * 4) + 1,
+            catCount: Math.floor(Math.random() * 5),
+            dogCount: Math.floor(Math.random() * 3),
+        };
+    })
 );
 
 interface HouseholdProps {
@@ -193,7 +199,7 @@ const Household: React.FC<HouseholdProps> = ({ onShowSuccess }) => {
                     <tbody className="bg-white">
                         {currentItems.map((item) => (
                             <tr key={item.id} className="hover:bg-gray-50/50 transition-colors" style={{ height: `${rowHeight}px` }}>
-                                <td className="pl-8 pr-4 text-[14px] text-gray-900 font-bold truncate">{item.id}</td>
+                                <td className="pl-8 pr-4 text-[14px] text-gray-900 font-bold truncate">{String(item.displayId ?? 0).padStart(4, '0')}</td>
                                 <td className="px-4 text-[14px] text-gray-700 font-medium truncate">{item.familyCount}</td>
                                 <td className="px-4 text-[14px] text-gray-700 font-medium truncate">{item.voterCount}</td>
                                 <td className="px-4 text-[14px] text-gray-700 font-medium truncate">{item.catCount}</td>

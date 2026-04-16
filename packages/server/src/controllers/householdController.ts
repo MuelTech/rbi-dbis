@@ -41,7 +41,10 @@ export async function createHousehold(
   next: NextFunction
 ) {
   try {
-    const household = await prisma.household.create({ data: req.body });
+    const data = { ...req.body };
+    delete data.displayId;
+    delete data.display_id;
+    const household = await prisma.household.create({ data });
     res.status(201).json(household);
   } catch (err) {
     next(err);
@@ -54,9 +57,12 @@ export async function updateHousehold(
   next: NextFunction
 ) {
   try {
+    const data = { ...req.body };
+    delete data.displayId;
+    delete data.display_id;
     const household = await prisma.household.update({
       where: { id: req.params.id },
-      data: req.body,
+      data,
     });
     res.json(household);
   } catch (err) {

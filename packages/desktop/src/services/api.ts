@@ -1,11 +1,22 @@
 const API_BASE = import.meta.env.VITE_API_URL ?? "http://localhost:4000/api";
 
+function authHeaders(): Record<string, string> {
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
+  const token = localStorage.getItem("authToken");
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
+  return headers;
+}
+
 async function request<T>(
   endpoint: string,
   options?: RequestInit
 ): Promise<T> {
   const res = await fetch(`${API_BASE}${endpoint}`, {
-    headers: { "Content-Type": "application/json" },
+    headers: authHeaders(),
     ...options,
   });
 

@@ -41,7 +41,10 @@ export async function createDocument(
   next: NextFunction
 ) {
   try {
-    const document = await prisma.document.create({ data: req.body });
+    const data = { ...req.body };
+    delete data.displayId;
+    delete data.display_id;
+    const document = await prisma.document.create({ data });
     res.status(201).json(document);
   } catch (err) {
     next(err);

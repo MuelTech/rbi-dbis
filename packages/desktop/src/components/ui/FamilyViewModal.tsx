@@ -15,11 +15,11 @@ interface FamilyViewModalProps {
 
 // Mock data for members
 const MOCK_MEMBERS = [
-    { id: '023', lastName: 'Dela Cruz', firstName: 'Juan', sex: 'Male', age: 45, voter: 'Yes', status: 'Active' },
-    { id: '024', lastName: 'Dela Cruz', firstName: 'Maria', sex: 'Female', age: 43, voter: 'Yes', status: 'Active' },
-    { id: '025', lastName: 'Dela Cruz', firstName: 'Jose', sex: 'Male', age: 18, voter: 'No', status: 'Moveout' },
-    { id: '026', lastName: 'Dela Cruz', firstName: 'Ana', sex: 'Female', age: 12, voter: 'No', status: 'Active' },
-    { id: '027', lastName: 'Dela Cruz', firstName: 'Lola', sex: 'Female', age: 78, voter: 'Yes', status: 'Deceased' },
+    { id: '023', displayId: 23, lastName: 'Dela Cruz', firstName: 'Juan', sex: 'Male', age: 45, voter: 'Yes', status: 'Active' },
+    { id: '024', displayId: 24, lastName: 'Dela Cruz', firstName: 'Maria', sex: 'Female', age: 43, voter: 'Yes', status: 'Active' },
+    { id: '025', displayId: 25, lastName: 'Dela Cruz', firstName: 'Jose', sex: 'Male', age: 18, voter: 'No', status: 'Moveout' },
+    { id: '026', displayId: 26, lastName: 'Dela Cruz', firstName: 'Ana', sex: 'Female', age: 12, voter: 'No', status: 'Active' },
+    { id: '027', displayId: 27, lastName: 'Dela Cruz', firstName: 'Lola', sex: 'Female', age: 78, voter: 'Yes', status: 'Deceased' },
 ];
 
 const FamilyViewModal: React.FC<FamilyViewModalProps> = ({ isOpen, onClose, familyId, familyName, onShowSuccess, familyStatus }) => {
@@ -323,7 +323,7 @@ const FamilyViewModal: React.FC<FamilyViewModalProps> = ({ isOpen, onClose, fami
                                         <tbody className="divide-y divide-gray-50">
                                             {displayMembers.map((member) => (
                                                 <tr key={member.id} className="hover:bg-gray-50/50 transition-colors">
-                                                    <td className="py-3 pl-6 pr-4 text-[13px] font-bold text-gray-900">{member.id}</td>
+                                                    <td className="py-3 pl-6 pr-4 text-[13px] font-bold text-gray-900">{String(member.displayId ?? 0).padStart(4, '0')}</td>
                                                     <td className="py-3 px-4 text-[13px] font-medium text-gray-700">{member.lastName}</td>
                                                     <td className="py-3 px-4 text-[13px] font-medium text-gray-700">{member.firstName}</td>
                                                     <td className="py-3 px-4 text-[13px] text-gray-600">{member.sex}</td>
