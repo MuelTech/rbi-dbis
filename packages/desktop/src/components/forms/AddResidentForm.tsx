@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Home, User, Users, Hash, MapPin, PawPrint, Car, ChevronLeft, ChevronRight, Check, Briefcase, GraduationCap, FileText, UserPlus, Send, Trash2, ChevronDown, ChevronUp } from 'lucide-react';
+import { Home, User, Users, Hash, MapPin, PawPrint, Car, ChevronLeft, ChevronRight, Check, Briefcase, GraduationCap, FileText, UserPlus, Send, Trash2, ChevronDown, ChevronUp, Loader2 } from 'lucide-react';
 import ConfirmationModal from '@/components/ui/ConfirmationModal';
+import { residentsService } from '@/services/residents';
 
 interface AddResidentFormProps {
     onCancel: () => void;
@@ -184,6 +185,8 @@ const AddResidentForm: React.FC<AddResidentFormProps> = ({ onCancel, setIsNaviga
     const [familyMembers, setFamilyMembers] = useState<FamilyMember[]>([]);
     const [errors, setErrors] = useState<Record<string, string>>({});
     const [showBackConfirmation, setShowBackConfirmation] = useState(false);
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [submitError, setSubmitError] = useState('');
 
     const householdOptions = React.useMemo(() => {
         if (!formData.block || !BLOCK_LIMITS[formData.block]) return [];
@@ -1184,20 +1187,60 @@ const AddResidentForm: React.FC<AddResidentFormProps> = ({ onCancel, setIsNaviga
                     </button>
                 ) : (
                     <button 
-                        onClick={() => {
-                            if (validateStep(currentStep)) {
+                        disabled={isSubmitting}
+                        onClick={async () => {
+                            if (!validateStep(currentStep)) return;
+                            setSubmitError('');
+                            setIsSubmitting(true);
+                            try {
+                                const payload: Record<string, any> = {
+                                    lastName: formData.headLastName,
+                                    firstName: formData.headFirstName,
+                                    middleName: formData.headMiddleName || undefined,
+                                    suffix: formData.headSuffix || undefined,
+                                    placeOfBirth: formData.headBirthPlace || undefined,
+                                    dateOfBirth: formData.headBirthDate || undefined,
+                                    sex: formData.headSex,
+                                    civilStatus: formData.headCivilStatus || undefined,
+                                    isVoter: formData.headIsVoter,
+                                    isPwd: formData.headIsPwd,
+                                    isSoloParent: formData.headIsSoloParent,
+                                    occupationType: formData.headOccupation || undefined,
+                                    contactNumber: formData.headContactNumber || undefined,
+                                    studentType: formData.headIsStudent === 'Yes' ? formData.headEducationLevel : undefined,
+                                };
+                                await residentsService.create(payload);
                                 if (setIsNavigationBlocked) setIsNavigationBlocked(false);
                                 onCancel();
                                 if (onShowSuccess) onShowSuccess("Create Resident Success");
+                            } catch (err: any) {
+                                setSubmitError(err?.message || 'Failed to create resident. Please try again.');
+                            } finally {
+                                setIsSubmitting(false);
                             }
                         }}
-                        className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-[13px] shadow-lg shadow-blue-200 transition-all active:scale-95"
+                        className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-[13px] shadow-lg shadow-blue-200 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                        Submit
-                        <Send size={16} />
+                        {isSubmitting ? (
+                            <>
+                                <Loader2 size={16} className="animate-spin" />
+                                Submitting...
+                            </>
+                        ) : (
+                            <>
+                                Submit
+                                <Send size={16} />
+                            </>
+                        )}
                     </button>
                 )}
             </div>
+
+            {submitError && (
+                <div className="px-6 py-3 bg-red-50 border-t border-red-100">
+                    <p className="text-red-600 text-[13px] font-medium">{submitError}</p>
+                </div>
+            )}
 
             <ConfirmationModal
                 isOpen={showBackConfirmation}

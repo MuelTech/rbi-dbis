@@ -153,6 +153,12 @@ model Resident {
   familyMember   FamilyMember?
   orders         Order[]
 
+  @@index([statusType])
+  @@index([sex])
+  @@index([isVoter])
+  @@index([lastName])
+  @@index([firstName])
+  @@index([createdAt])
   @@map("residents")
 }
 
