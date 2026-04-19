@@ -134,18 +134,134 @@ export async function getResidents(
   }
 }
 
+async function buildResidentDetail(id: string) {
+  const [resident, auditTrails] = await Promise.all([
+    prisma.resident.findUnique({
+      where: { id },
+      include: {
+        familyHead: {
+          include: {
+            household: true,
+            address: true,
+          },
+        },
+        familyMember: {
+          include: {
+            family: {
+              include: {
+                headPerson: true,
+                household: true,
+                address: true,
+              },
+            },
+          },
+        },
+        orders: {
+          include: {
+            document: { include: { documentType: true } },
+            user: { include: { userInfo: true } },
+          },
+          orderBy: { orderDate: "desc" as const },
+        },
+      },
+    }),
+    prisma.auditTrail.findMany({
+      where: { tableName: "residents", recordId: id },
+      include: { user: { include: { userInfo: true } } },
+      orderBy: { timestamp: "desc" },
+      take: 50,
+    }),
+  ]);
+
+  if (!resident) return null;
+
+  const family = resident.familyHead
+    ?? resident.familyMember?.family
+    ?? null;
+
+  const headPerson = resident.familyHead
+    ? resident
+    : resident.familyMember?.family?.headPerson ?? null;
+
+  const familyHeadLabel = headPerson
+    ? `${headPerson.lastName}, ${headPerson.firstName}${headPerson.suffix ? ` ${headPerson.suffix}` : ""}`
+    : null;
+
+  const relationshipToHead = resident.familyHead
+    ? "Head"
+    : resident.familyMember?.relationshipType ?? null;
+
+  const household = family
+    ? {
+        householdNo: family.household?.brgyHouseholdNo ?? "",
+        streetName: family.address?.streetName ?? "",
+        alley: family.address?.alleyName ?? "",
+      }
+    : null;
+
+  const orders = resident.orders.map((o) => ({
+    displayId: o.displayId,
+    orderDate: o.orderDate,
+    documentType: o.document?.documentType?.documentName ?? "",
+    amount: Number(o.amount),
+    personnelName: o.user?.userInfo
+      ? `${o.user.userInfo.firstName} ${o.user.userInfo.lastName}`
+      : o.user?.username ?? "",
+  }));
+
+  const shapedAuditTrails = auditTrails.map((a) => ({
+    id: a.id,
+    timestamp: a.timestamp,
+    personnelName: a.user?.userInfo
+      ? `${a.user.userInfo.firstName} ${a.user.userInfo.lastName}`
+      : a.user?.username ?? "",
+    actionType: a.actionType,
+    fieldName: a.fieldName,
+    oldValue: a.oldValue,
+    newValue: a.newValue,
+  }));
+
+  return {
+    id: resident.id,
+    displayId: resident.displayId,
+    lastName: resident.lastName,
+    firstName: resident.firstName,
+    middleName: resident.middleName,
+    suffix: resident.suffix,
+    placeOfBirth: resident.placeOfBirth,
+    dateOfBirth: resident.dateOfBirth,
+    sex: resident.sex,
+    civilStatus: resident.civilStatus,
+    voter: resident.isVoter ? "Yes" : "No",
+    isVoter: resident.isVoter,
+    isPwd: resident.isPwd,
+    isSoloParent: resident.isSoloParent,
+    isOwner: resident.isOwner,
+    studentType: resident.studentType,
+    status: STATUS_MAP_TO_UI[resident.statusType] ?? "Active",
+    contactNumber: resident.contactNumber,
+    occupation: resident.occupationType,
+    profileImage: resident.profileImage,
+    age: computeAge(resident.dateOfBirth),
+    createdAt: resident.createdAt,
+    updatedAt: resident.updatedAt,
+    familyHead: familyHeadLabel ? { name: familyHeadLabel } : null,
+    relationshipToHead,
+    household,
+    orders,
+    auditTrails: shapedAuditTrails,
+  };
+}
+
 export async function getResidentById(
   req: Request,
   res: Response,
   next: NextFunction
 ) {
   try {
-    const id = req.params.id as string;
-    const resident = await prisma.resident.findUnique({
-      where: { id },
-    });
-    if (!resident) return res.status(404).json({ error: "Resident not found" });
-    res.json(resident);
+    const detail = await buildResidentDetail(req.params.id as string);
+    if (!detail) return res.status(404).json({ error: "Resident not found" });
+    res.json(detail);
   } catch (err) {
     next(err);
   }
@@ -175,15 +291,39 @@ export async function updateResident(
 ) {
   try {
     const id = req.params.id as string;
-    const data = { ...req.body };
-    delete data.displayId;
-    delete data.display_id;
-    if (data.dateOfBirth) data.dateOfBirth = new Date(data.dateOfBirth);
-    const resident = await prisma.resident.update({
-      where: { id },
-      data,
-    });
-    res.json(resident);
+    const body = req.body;
+
+    const dbData: Record<string, unknown> = {};
+
+    const directFields = [
+      "firstName", "lastName", "middleName", "suffix",
+      "placeOfBirth", "civilStatus", "contactNumber", "profileImage",
+    ] as const;
+    for (const f of directFields) {
+      if (body[f] !== undefined) dbData[f] = body[f];
+    }
+
+    if (body.dateOfBirth !== undefined) {
+      dbData.dateOfBirth = body.dateOfBirth ? new Date(body.dateOfBirth) : null;
+    }
+    if (body.sex !== undefined) dbData.sex = body.sex;
+    if (body.occupation !== undefined) dbData.occupationType = body.occupation;
+    if (body.studentType !== undefined) dbData.studentType = body.studentType;
+    if (body.isVoter !== undefined) dbData.isVoter = body.isVoter;
+    if (body.isPwd !== undefined) dbData.isPwd = body.isPwd;
+    if (body.isSoloParent !== undefined) dbData.isSoloParent = body.isSoloParent;
+    if (body.isOwner !== undefined) dbData.isOwner = body.isOwner;
+
+    if (body.status !== undefined) {
+      const mapped = STATUS_MAP_TO_DB[body.status];
+      if (mapped) dbData.statusType = mapped;
+    }
+
+    await prisma.resident.update({ where: { id }, data: dbData });
+
+    const detail = await buildResidentDetail(id);
+    if (!detail) return res.status(404).json({ error: "Resident not found" });
+    res.json(detail);
   } catch (err) {
     next(err);
   }

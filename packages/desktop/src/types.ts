@@ -75,6 +75,98 @@ export interface Resident {
   occupation_type?: string;
 }
 
+export interface ResidentOrder {
+  displayId: number;
+  orderDate: string;
+  documentType: string;
+  amount: number;
+  personnelName: string;
+}
+
+export interface ResidentAuditTrail {
+  id: string;
+  timestamp: string;
+  personnelName: string;
+  actionType: string;
+  fieldName: string | null;
+  oldValue: string | null;
+  newValue: string | null;
+}
+
+export interface ResidentDetail extends Resident {
+  isVoter?: boolean;
+  isPwd?: boolean;
+  isSoloParent?: boolean;
+  profileImage?: string | null;
+  familyHead: { name: string } | null;
+  relationshipToHead: string | null;
+  household: { householdNo: string; streetName: string; alley: string } | null;
+  orders: ResidentOrder[];
+  auditTrails: ResidentAuditTrail[];
+}
+
+export interface RegistrationHeadPayload {
+  lastName: string;
+  firstName: string;
+  middleName?: string;
+  suffix?: string;
+  placeOfBirth?: string;
+  dateOfBirth?: string;
+  sex: 'Male' | 'Female';
+  civilStatus?: string;
+  isVoter: boolean;
+  isPwd: boolean;
+  isSoloParent: boolean;
+  isOwner: boolean;
+  occupationType?: string;
+  contactNumber?: string;
+  studentType?: string;
+}
+
+export interface RegistrationMemberPayload {
+  relationshipType: string;
+  lastName: string;
+  firstName: string;
+  middleName?: string;
+  suffix?: string;
+  placeOfBirth?: string;
+  dateOfBirth?: string;
+  sex: 'Male' | 'Female';
+  civilStatus?: string;
+  isVoter: boolean;
+  isPwd: boolean;
+  isSoloParent: boolean;
+  occupationType?: string;
+  contactNumber?: string;
+  studentType?: string;
+}
+
+export interface RegistrationPayload {
+  household: { blockNumber: string; brgyHouseholdNo: string };
+  address: { houseNo: string; streetName: string; alleyName: string };
+  head: RegistrationHeadPayload;
+  pet?: {
+    isPetOwner: boolean;
+    numberOfDogs: number;
+    numberOfCats: number;
+    others?: string;
+  };
+  vehicle?: {
+    numberOfMotorcycles: number;
+    motorcyclePlateNumber?: string;
+    numberOfVehicles: number;
+    vehiclePlateNumber?: string;
+  };
+  familyMembers: RegistrationMemberPayload[];
+}
+
+export interface RegistrationResult {
+  headDisplayId: number;
+  familyDisplayId: number;
+  householdDisplayId: number;
+  memberCount: number;
+}
+
 export type FieldSource = 'resident' | 'input' | 'system';
 
 export interface DocumentField {

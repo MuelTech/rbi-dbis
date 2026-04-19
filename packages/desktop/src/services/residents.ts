@@ -1,5 +1,5 @@
 import { api } from "./api";
-import type { Resident } from "../types";
+import type { Resident, ResidentDetail, RegistrationPayload, RegistrationResult } from "../types";
 
 export interface ResidentListParams {
   page?: number;
@@ -29,9 +29,11 @@ export const residentsService = {
       `/residents${query ? `?${query}` : ""}`
     );
   },
-  getById: (id: string) => api.get<Resident>(`/residents/${id}`),
+  getById: (id: string) => api.get<ResidentDetail>(`/residents/${id}`),
   create: (data: Partial<Resident>) => api.post<Resident>("/residents", data),
-  update: (id: string, data: Partial<Resident>) =>
-    api.put<Resident>(`/residents/${id}`, data),
+  update: (id: string, data: Record<string, unknown>) =>
+    api.put<ResidentDetail>(`/residents/${id}`, data),
   delete: (id: string) => api.delete(`/residents/${id}`),
+  register: (data: RegistrationPayload) =>
+    api.post<RegistrationResult>("/resident-registrations", data),
 };

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Home, User, Users, Hash, MapPin, PawPrint, Car, ChevronLeft, ChevronRight, Check, Briefcase, GraduationCap, FileText, UserPlus, Send, Trash2, ChevronDown, ChevronUp, Loader2 } from 'lucide-react';
 import ConfirmationModal from '@/components/ui/ConfirmationModal';
 import { residentsService } from '@/services/residents';
+import type { RegistrationPayload } from '@/types';
 
 interface AddResidentFormProps {
     onCancel: () => void;
@@ -1193,23 +1194,71 @@ const AddResidentForm: React.FC<AddResidentFormProps> = ({ onCancel, setIsNaviga
                             setSubmitError('');
                             setIsSubmitting(true);
                             try {
-                                const payload: Record<string, any> = {
-                                    lastName: formData.headLastName,
-                                    firstName: formData.headFirstName,
-                                    middleName: formData.headMiddleName || undefined,
-                                    suffix: formData.headSuffix || undefined,
-                                    placeOfBirth: formData.headBirthPlace || undefined,
-                                    dateOfBirth: formData.headBirthDate || undefined,
-                                    sex: formData.headSex,
-                                    civilStatus: formData.headCivilStatus || undefined,
-                                    isVoter: formData.headIsVoter,
-                                    isPwd: formData.headIsPwd,
-                                    isSoloParent: formData.headIsSoloParent,
-                                    occupationType: formData.headOccupation || undefined,
-                                    contactNumber: formData.headContactNumber || undefined,
-                                    studentType: formData.headIsStudent === 'Yes' ? formData.headEducationLevel : undefined,
+                                const payload: RegistrationPayload = {
+                                    household: {
+                                        blockNumber: formData.block,
+                                        brgyHouseholdNo: formData.householdNumber,
+                                    },
+                                    address: {
+                                        houseNo: formData.houseNumber,
+                                        streetName: formData.streetName,
+                                        alleyName: formData.alley,
+                                    },
+                                    head: {
+                                        lastName: formData.headLastName,
+                                        firstName: formData.headFirstName,
+                                        middleName: formData.headMiddleName || undefined,
+                                        suffix: formData.headSuffix || undefined,
+                                        placeOfBirth: formData.headBirthPlace || undefined,
+                                        dateOfBirth: formData.headBirthDate || undefined,
+                                        sex: formData.headSex as 'Male' | 'Female',
+                                        civilStatus: formData.headCivilStatus || undefined,
+                                        isVoter: formData.headIsVoter,
+                                        isPwd: formData.headIsPwd,
+                                        isSoloParent: formData.headIsSoloParent,
+                                        isOwner: false,
+                                        occupationType: formData.headOccupation || undefined,
+                                        contactNumber: formData.headContactNumber || undefined,
+                                        studentType: formData.headIsStudent === 'Yes' ? formData.headEducationLevel : undefined,
+                                    },
+                                    familyMembers: familyMembers.map((m) => ({
+                                        relationshipType: m.relationship,
+                                        lastName: m.lastName,
+                                        firstName: m.firstName,
+                                        middleName: m.middleName || undefined,
+                                        suffix: m.suffix || undefined,
+                                        placeOfBirth: m.birthPlace || undefined,
+                                        dateOfBirth: m.birthDate || undefined,
+                                        sex: m.sex as 'Male' | 'Female',
+                                        civilStatus: m.civilStatus || undefined,
+                                        isVoter: m.isVoter,
+                                        isPwd: m.isPwd,
+                                        isSoloParent: m.isSoloParent,
+                                        occupationType: m.occupation || undefined,
+                                        contactNumber: m.contactNumber || undefined,
+                                        studentType: m.isStudent === 'Yes' ? m.educationLevel : undefined,
+                                    })),
                                 };
-                                await residentsService.create(payload);
+
+                                if (formData.hasPets === 'Yes') {
+                                    payload.pet = {
+                                        isPetOwner: true,
+                                        numberOfDogs: Number(formData.numberOfDogs) || 0,
+                                        numberOfCats: Number(formData.numberOfCats) || 0,
+                                        others: formData.otherAnimals || undefined,
+                                    };
+                                }
+
+                                if (formData.hasVehicles === 'Yes') {
+                                    payload.vehicle = {
+                                        numberOfMotorcycles: Number(formData.numberOfMotorcycles) || 0,
+                                        motorcyclePlateNumber: formData.motorcyclePlateNumbers || undefined,
+                                        numberOfVehicles: Number(formData.numberOfOtherVehicles) || 0,
+                                        vehiclePlateNumber: formData.otherVehiclePlateNumbers || undefined,
+                                    };
+                                }
+
+                                await residentsService.register(payload);
                                 if (setIsNavigationBlocked) setIsNavigationBlocked(false);
                                 onCancel();
                                 if (onShowSuccess) onShowSuccess("Create Resident Success");
