@@ -2,6 +2,12 @@
 workspace:
   id: 65447367-35a6-4db3-8090-a5c0525d294e
 
+# Each entry here maps a local resource to one or more corresponding objects in Postman Cloud
+
+cloudResources:
+  collections:
+    ..\postman\collections\RBI-DBIS Auth Flow: rbi-dbis-auth-flow
+
 # All resources in the `postman/` folder are automatically registered in Local View.
 # Point to additional files outside the `postman/` folder to register them individually. Example:
 #localResources:

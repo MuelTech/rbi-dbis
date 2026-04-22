@@ -4,6 +4,27 @@ import { prisma } from "@rbi/db";
 
 const SALT_ROUNDS = 10;
 
+function extractUserInfoFields(body: Record<string, any>) {
+  const nested = body.userInfo ?? {};
+  const firstName = body.firstName ?? nested.firstName;
+  const lastName = body.lastName ?? nested.lastName;
+  const phoneNumber = body.phoneNumber ?? nested.phoneNumber;
+
+  const data = { ...body };
+  delete data.firstName;
+  delete data.lastName;
+  delete data.phoneNumber;
+  delete data.userInfo;
+
+  const hasInfo = firstName !== undefined || lastName !== undefined;
+  return {
+    data,
+    userInfoFields: hasInfo
+      ? { firstName, lastName, phoneNumber }
+      : null,
+  };
+}
+
 export async function getUsers(
   _req: Request,
   res: Response,
@@ -46,15 +67,21 @@ export async function createUser(
   next: NextFunction
 ) {
   try {
-    const data = { ...req.body };
+    const { data, userInfoFields } = extractUserInfoFields(req.body);
     delete data.displayId;
     delete data.display_id;
     if (data.password) {
       data.password = await bcrypt.hash(data.password, SALT_ROUNDS);
     }
-    const user = await prisma.user.create({ data });
-    const { password: _, ...safeUser } = user;
-    res.status(201).json(safeUser);
+    const user = await prisma.user.create({
+      data: {
+        ...data,
+        ...(userInfoFields && { userInfo: { create: userInfoFields } }),
+      },
+      omit: { password: true },
+      include: { userInfo: true },
+    });
+    res.status(201).json(user);
   } catch (err) {
     next(err);
   }
@@ -67,7 +94,7 @@ export async function updateUser(
 ) {
   try {
     const id = req.params.id as string;
-    const data = { ...req.body };
+    const { data, userInfoFields } = extractUserInfoFields(req.body);
     delete data.displayId;
     delete data.display_id;
     if (data.password) {
@@ -78,10 +105,21 @@ export async function updateUser(
     }
     const user = await prisma.user.update({
       where: { id },
-      data,
+      data: {
+        ...data,
+        ...(userInfoFields && {
+          userInfo: {
+            upsert: {
+              create: userInfoFields,
+              update: userInfoFields,
+            },
+          },
+        }),
+      },
+      omit: { password: true },
+      include: { userInfo: true },
     });
-    const { password: _, ...safeUser } = user;
-    res.json(safeUser);
+    res.json(user);
   } catch (err) {
     next(err);
   }

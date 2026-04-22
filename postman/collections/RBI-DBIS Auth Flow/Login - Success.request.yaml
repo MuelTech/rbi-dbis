@@ -1,0 +1,37 @@
+$kind: http-request
+url: "{{baseUrl}}/auth/login"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: text
+  content: |-
+    {
+      "username": "{{qaUsername}}",
+      "password": "{{qaPassword}}"
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Status is 200', function () {
+        pm.response.to.have.status(200);
+      });
+
+      pm.test('Response has token and user', function () {
+        var json = pm.response.json();
+        pm.expect(json).to.have.property('token');
+        pm.expect(json.token).to.be.a('string').and.not.empty;
+        pm.expect(json).to.have.property('user');
+        pm.expect(json.user).to.have.property('id');
+        pm.expect(json.user).to.have.property('username');
+        pm.expect(json.user).to.have.property('roleType');
+        pm.expect(json.user).to.have.property('firstName');
+        pm.expect(json.user).to.have.property('lastName');
+      });
+
+      pm.test('Save token for subsequent requests', function () {
+        var json = pm.response.json();
+        pm.environment.set('authToken', json.token);
+      });
+    language: text/javascript
+order: 2000

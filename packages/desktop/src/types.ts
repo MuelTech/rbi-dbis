@@ -16,6 +16,12 @@ export interface User {
   lastLogin?: string;
   status: 'Active' | 'Disabled';
   isActive?: boolean;
+  userInfo?: {
+    firstName: string;
+    lastName: string;
+    phoneNumber?: string;
+    profileImage?: string | null;
+  };
 }
 
 export interface StatCardProps {

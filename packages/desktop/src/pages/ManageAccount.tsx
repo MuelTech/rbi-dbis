@@ -129,20 +129,23 @@ const ManageAccount: React.FC<ManageAccountProps> = ({ onShowSuccess, setIsNavig
                 roleType: formData.role,
                 permission: formData.permission,
                 isActive: formData.status,
+                firstName: formData.firstName,
+                lastName: formData.lastName,
+                phoneNumber: formData.phoneNumber,
             };
             if (formData.password) payload.password = formData.password;
 
             if (isEditing && editingId) {
-                await usersService.update(editingId, payload);
+                const updated: any = await usersService.update(editingId, payload);
                 setUsers(prev => prev.map(u => u.id === editingId ? {
                     ...u,
-                    firstName: formData.firstName,
-                    lastName: formData.lastName,
-                    username: formData.username,
-                    phoneNumber: formData.phoneNumber,
-                    role: formData.role,
-                    permission: formData.permission,
-                    status: formData.status ? 'Active' : 'Disabled' as UserType['status'],
+                    firstName: updated.userInfo?.firstName ?? formData.firstName,
+                    lastName: updated.userInfo?.lastName ?? formData.lastName,
+                    username: updated.username,
+                    phoneNumber: updated.userInfo?.phoneNumber ?? formData.phoneNumber,
+                    role: updated.roleType as UserType['role'],
+                    permission: (updated.permission ?? u.permission) as UserType['permission'],
+                    status: updated.isActive ? 'Active' : 'Disabled' as UserType['status'],
                 } : u));
                 setIsEditing(false);
                 setEditingId(null);
@@ -152,13 +155,13 @@ const ManageAccount: React.FC<ManageAccountProps> = ({ onShowSuccess, setIsNavig
                 setUsers(prev => [{
                     id: created.id,
                     displayId: created.displayId,
-                    firstName: formData.firstName,
-                    lastName: formData.lastName,
-                    username: formData.username,
-                    phoneNumber: formData.phoneNumber,
-                    role: formData.role,
-                    permission: formData.permission,
-                    status: formData.status ? 'Active' : 'Disabled' as UserType['status'],
+                    firstName: created.userInfo?.firstName ?? formData.firstName,
+                    lastName: created.userInfo?.lastName ?? formData.lastName,
+                    username: created.username,
+                    phoneNumber: created.userInfo?.phoneNumber ?? formData.phoneNumber,
+                    role: (created.roleType ?? formData.role) as UserType['role'],
+                    permission: (created.permission ?? formData.permission) as UserType['permission'],
+                    status: created.isActive ? 'Active' : 'Disabled' as UserType['status'],
                     lastLogin: 'Never',
                 }, ...prev]);
                 if (onShowSuccess) onShowSuccess('Account created successfully');

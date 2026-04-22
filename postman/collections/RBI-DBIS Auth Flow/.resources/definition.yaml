@@ -1,0 +1,5 @@
+$kind: collection
+description: |-
+  Authentication flow tests for the RBI-DBIS Barangay Management API.
+
+  Run after seeding the database (`pnpm db:seed`) so the QA account exists.
