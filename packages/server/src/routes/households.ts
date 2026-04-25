@@ -2,6 +2,7 @@ import { Router } from "express";
 import {
   getHouseholds,
   getHouseholdById,
+  getHouseholdFamilies,
   createHousehold,
   updateHousehold,
   deleteHousehold,
@@ -10,6 +11,7 @@ import {
 export const householdRouter = Router();
 
 householdRouter.get("/", getHouseholds);
+householdRouter.get("/:householdId/families", getHouseholdFamilies);
 householdRouter.get("/:id", getHouseholdById);
 householdRouter.post("/", createHousehold);
 householdRouter.put("/:id", updateHousehold);

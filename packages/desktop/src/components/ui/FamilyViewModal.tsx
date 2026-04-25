@@ -1,3 +1,7 @@
+// TODO: Replace MOCK_MEMBERS and static formData with a real GET /api/families/:familyId
+// detail endpoint. The family list modal now uses live data, but this view modal still
+// relies on mock data until the family detail API is implemented.
+
 import React, { useEffect, useState, useRef } from 'react';
 import { X, User, Edit, Plus, FileText, CreditCard, Search, Trash2, PawPrint, Car, Save, ChevronDown } from 'lucide-react';
 import AddMemberForm from '@/components/forms/AddMemberForm';
@@ -13,7 +17,7 @@ interface FamilyViewModalProps {
     familyStatus?: 'Moveout' | 'Deceased';
 }
 
-// Mock data for members
+// TODO: Remove once family detail endpoint is available
 const MOCK_MEMBERS = [
     { id: '023', displayId: 23, lastName: 'Dela Cruz', firstName: 'Juan', sex: 'Male', age: 45, voter: 'Yes', status: 'Active' },
     { id: '024', displayId: 24, lastName: 'Dela Cruz', firstName: 'Maria', sex: 'Female', age: 43, voter: 'Yes', status: 'Active' },

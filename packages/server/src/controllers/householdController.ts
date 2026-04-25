@@ -91,6 +91,109 @@ export async function getHouseholds(
   }
 }
 
+export async function getHouseholdFamilies(
+  req: Request,
+  res: Response,
+  next: NextFunction
+) {
+  try {
+    const householdId = req.params.householdId as string;
+
+    const household = await prisma.household.findUnique({
+      where: { id: householdId },
+      select: { id: true, brgyHouseholdNo: true },
+    });
+    if (!household)
+      return res.status(404).json({ error: "Household not found" });
+
+    const page = Math.max(1, parseInt(req.query.page as string) || 1);
+    const pageSize = Math.max(
+      1,
+      Math.min(100, parseInt(req.query.pageSize as string) || 20)
+    );
+    const search = (req.query.search as string) || "";
+
+    const where: Prisma.FamilyWhereInput = {
+      householdId: householdId,
+      isArchived: false,
+    };
+
+    if (search) {
+      where.familyName = { contains: search };
+    }
+
+    const skip = (page - 1) * pageSize;
+
+    const [total, families] = await Promise.all([
+      prisma.family.count({ where }),
+      prisma.family.findMany({
+        where,
+        skip,
+        take: pageSize,
+        orderBy: { createdAt: "desc" },
+        include: {
+          headPerson: { select: { isVoter: true } },
+          members: {
+            include: { resident: { select: { isVoter: true } } },
+          },
+          pet: {
+            select: { numberOfCats: true, numberOfDogs: true },
+          },
+          vehicle: {
+            select: { numberOfMotorcycles: true, numberOfVehicles: true },
+          },
+        },
+      }),
+    ]);
+
+    let totalMotorcycles = 0;
+    let totalVehicles = 0;
+    let totalCats = 0;
+    let totalDogs = 0;
+
+    const data = families.map((f) => {
+      let voterCount = f.headPerson.isVoter ? 1 : 0;
+      for (const m of f.members) {
+        if (m.resident.isVoter) voterCount++;
+      }
+      const residentCount = 1 + f.members.length;
+
+      if (f.pet) {
+        totalCats += f.pet.numberOfCats;
+        totalDogs += f.pet.numberOfDogs;
+      }
+      if (f.vehicle) {
+        totalMotorcycles += f.vehicle.numberOfMotorcycles;
+        totalVehicles += f.vehicle.numberOfVehicles;
+      }
+
+      return {
+        id: f.id,
+        displayId: f.displayId,
+        familyName: f.familyName,
+        residentCount,
+        voterCount,
+      };
+    });
+
+    const totalPages = Math.ceil(total / pageSize);
+
+    res.json({
+      data,
+      meta: { page, pageSize, total, totalPages },
+      summary: {
+        motorcycles: totalMotorcycles,
+        vehicles: totalVehicles,
+        cats: totalCats,
+        dogs: totalDogs,
+      },
+      householdNo: household.brgyHouseholdNo,
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
 export async function getHouseholdById(
   req: Request,
   res: Response,
@@ -99,7 +202,7 @@ export async function getHouseholdById(
   try {
     const household = await prisma.household.findUnique({
       where: { id: req.params.id },
-      include: { members: true },
+      include: { block: true, families: true },
     });
     if (!household)
       return res.status(404).json({ error: "Household not found" });

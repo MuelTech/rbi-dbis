@@ -1,6 +1,8 @@
-import React, { useState, useEffect } from 'react';
-import { X, Search, ChevronLeft, ChevronRight, Trash2, Bike, Car, Cat, Dog, Users, Archive } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { X, Search, ChevronLeft, ChevronRight, Archive, Bike, Car, Cat, Dog, Users } from 'lucide-react';
 import FamilyViewModal from '@/components/ui/FamilyViewModal';
+import { familiesService } from '@/services/families';
+import type { FamilyRow, FamilySummary } from '@/services/families';
 
 interface FamilyListModalProps {
     isOpen: boolean;
@@ -9,27 +11,19 @@ interface FamilyListModalProps {
     onShowSuccess?: (message: string) => void;
 }
 
-interface FamilyData {
-    id: string;
-    displayId: number;
-    familyName: string;
-    residentCount: number;
-    voterCount: number;
-}
-
-const MOCK_FAMILIES: FamilyData[] = Array.from({ length: 15 }, (_, i) => ({
-    id: `fam-mock-${i + 1}`,
-    displayId: i + 1,
-    familyName: ['Dela Cruz', 'Santos', 'Reyes', 'Garcia', 'Mendoza', 'Bautista', 'Ocampo', 'Gonzales', 'Lopez', 'Sy'][i % 10],
-    residentCount: Math.floor(Math.random() * 6) + 2,
-    voterCount: Math.floor(Math.random() * 4),
-}));
-
 const FamilyListModal: React.FC<FamilyListModalProps> = ({ isOpen, onClose, householdId, onShowSuccess }) => {
     const [currentPage, setCurrentPage] = useState(1);
     const [searchQuery, setSearchQuery] = useState('');
-    const [selectedFamily, setSelectedFamily] = useState<{id: string, name: string} | null>(null);
+    const [debouncedSearch, setDebouncedSearch] = useState('');
+    const [selectedFamily, setSelectedFamily] = useState<{ id: string; name: string } | null>(null);
     const itemsPerPage = 10;
+
+    const [families, setFamilies] = useState<FamilyRow[]>([]);
+    const [total, setTotal] = useState(0);
+    const [totalPages, setTotalPages] = useState(0);
+    const [summary, setSummary] = useState<FamilySummary>({ motorcycles: 0, vehicles: 0, cats: 0, dogs: 0 });
+    const [householdNo, setHouseholdNo] = useState('');
+    const [isLoading, setIsLoading] = useState(false);
 
     useEffect(() => {
         if (isOpen) {
@@ -42,24 +36,66 @@ const FamilyListModal: React.FC<FamilyListModalProps> = ({ isOpen, onClose, hous
         };
     }, [isOpen]);
 
+    useEffect(() => {
+        const timer = setTimeout(() => setDebouncedSearch(searchQuery), 300);
+        return () => clearTimeout(timer);
+    }, [searchQuery]);
+
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [debouncedSearch, householdId]);
+
+    useEffect(() => {
+        if (!isOpen) {
+            setSearchQuery('');
+            setDebouncedSearch('');
+            setCurrentPage(1);
+            setFamilies([]);
+            setSummary({ motorcycles: 0, vehicles: 0, cats: 0, dogs: 0 });
+            setHouseholdNo('');
+        }
+    }, [isOpen]);
+
+    const fetchFamilies = useCallback(async () => {
+        if (!householdId) return;
+        setIsLoading(true);
+        try {
+            const result = await familiesService.listByHousehold(householdId, {
+                page: currentPage,
+                pageSize: itemsPerPage,
+                search: debouncedSearch || undefined,
+            });
+            setFamilies(result.data);
+            setTotal(result.meta.total);
+            setTotalPages(result.meta.totalPages);
+            setSummary(result.summary);
+            setHouseholdNo(result.householdNo);
+        } catch {
+            setFamilies([]);
+            setTotal(0);
+            setTotalPages(0);
+        } finally {
+            setIsLoading(false);
+        }
+    }, [householdId, currentPage, debouncedSearch]);
+
+    useEffect(() => {
+        if (isOpen && householdId) {
+            fetchFamilies();
+        }
+    }, [isOpen, fetchFamilies]);
+
     if (!isOpen) return null;
 
-    const filteredFamilies = MOCK_FAMILIES.filter(family => 
-        family.familyName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        family.id.includes(searchQuery)
-    );
-
-    const totalPages = Math.ceil(filteredFamilies.length / itemsPerPage);
-    const indexOfLastItem = currentPage * itemsPerPage;
-    const indexOfFirstItem = indexOfLastItem - itemsPerPage;
-    const currentItems = filteredFamilies.slice(indexOfFirstItem, indexOfLastItem);
-    const emptyRows = Math.max(0, itemsPerPage - currentItems.length);
+    const indexOfFirstItem = (currentPage - 1) * itemsPerPage;
+    const indexOfLastItem = indexOfFirstItem + families.length;
+    const emptyRows = Math.max(0, itemsPerPage - families.length);
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6">
             {/* Backdrop */}
-            <div 
-                className="absolute inset-0 bg-gray-900/20 backdrop-blur-sm transition-opacity" 
+            <div
+                className="absolute inset-0 bg-gray-900/20 backdrop-blur-sm transition-opacity"
                 onClick={onClose}
             />
 
@@ -75,11 +111,11 @@ const FamilyListModal: React.FC<FamilyListModalProps> = ({ isOpen, onClose, hous
                             <h2 className="text-xl font-bold text-gray-900">Family List</h2>
                             <p className="text-sm text-gray-500 font-medium flex items-center gap-2">
                                 <span className="text-gray-400"><HomeIcon size={12} /></span>
-                                Household No. #{householdId.replace('HH-', '')}
+                                Household No. #{householdNo.padStart(3, '0')}
                             </p>
                         </div>
                     </div>
-                    <button 
+                    <button
                         onClick={onClose}
                         className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
                     >
@@ -90,10 +126,10 @@ const FamilyListModal: React.FC<FamilyListModalProps> = ({ isOpen, onClose, hous
                 <div className="p-8 overflow-y-auto custom-scrollbar">
                     {/* Stats Cards */}
                     <div className="grid grid-cols-4 gap-4 mb-8">
-                        <StatCard icon={Bike} label="Motorcycles" value="42" color="text-blue-600" bgColor="bg-blue-50" />
-                        <StatCard icon={Car} label="Vehicles" value="18" color="text-green-600" bgColor="bg-green-50" />
-                        <StatCard icon={Cat} label="Cats" value="34" color="text-orange-500" bgColor="bg-orange-50" />
-                        <StatCard icon={Dog} label="Dogs" value="27" color="text-red-500" bgColor="bg-red-50" />
+                        <StatCard icon={Bike} label="Motorcycles" value={summary.motorcycles} color="text-blue-600" bgColor="bg-blue-50" />
+                        <StatCard icon={Car} label="Vehicles" value={summary.vehicles} color="text-green-600" bgColor="bg-green-50" />
+                        <StatCard icon={Cat} label="Cats" value={summary.cats} color="text-orange-500" bgColor="bg-orange-50" />
+                        <StatCard icon={Dog} label="Dogs" value={summary.dogs} color="text-red-500" bgColor="bg-red-50" />
                     </div>
 
                     {/* Search and Title */}
@@ -124,32 +160,45 @@ const FamilyListModal: React.FC<FamilyListModalProps> = ({ isOpen, onClose, hous
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-50">
-                                {currentItems.map((family) => (
-                                    <tr key={family.id} className="hover:bg-gray-50/50 transition-colors">
-                                        <td className="py-4 pl-8 pr-4 text-[14px] font-bold text-gray-900">{String(family.displayId ?? 0).padStart(4, '0')}</td>
-                                        <td className="py-4 px-4 text-[14px] font-medium text-gray-700">{family.familyName}</td>
-                                        <td className="py-4 px-4 text-[14px] text-gray-600">{family.residentCount}</td>
-                                        <td className="py-4 px-4 text-[14px] text-gray-600">{family.voterCount}</td>
-                                        <td className="py-4 px-8">
-                                            <div className="flex items-center justify-center gap-2">
-                                                <button 
-                                                    onClick={() => setSelectedFamily({ id: family.id, name: family.familyName })}
-                                                    className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                                                >
-                                                    <Search size={18} />
-                                                </button>
-                                                <button className="p-2 text-gray-400 hover:text-orange-600 hover:bg-orange-50 rounded-lg transition-colors">
-                                                    <Archive size={18} />
-                                                </button>
-                                            </div>
-                                        </td>
+                                {isLoading && families.length === 0 ? (
+                                    <tr>
+                                        <td colSpan={5} className="py-12 text-center text-sm text-gray-400">Loading...</td>
                                     </tr>
-                                ))}
-                                {Array.from({ length: emptyRows }).map((_, idx) => (
-                                    <tr key={`empty-${idx}`}>
-                                        <td colSpan={5} className="py-4">&nbsp;</td>
+                                ) : families.length === 0 && !isLoading ? (
+                                    <tr>
+                                        <td colSpan={5} className="py-12 text-center text-sm text-gray-400">No families found</td>
                                     </tr>
-                                ))}
+                                ) : (
+                                    <>
+                                        {families.map((family) => (
+                                            <tr key={family.id} className="hover:bg-gray-50/50 transition-colors">
+                                                <td className="py-4 pl-8 pr-4 text-[14px] font-bold text-gray-900">{String(family.displayId ?? 0).padStart(3, '0')}</td>
+                                                <td className="py-4 px-4 text-[14px] font-medium text-gray-700">{family.familyName}</td>
+                                                <td className="py-4 px-4 text-[14px] text-gray-600">{family.residentCount}</td>
+                                                <td className="py-4 px-4 text-[14px] text-gray-600">{family.voterCount}</td>
+                                                <td className="py-4 px-8">
+                                                    <div className="flex items-center justify-center gap-2">
+                                                        {/* TODO: Wire to family detail endpoint when available */}
+                                                        <button
+                                                            onClick={() => setSelectedFamily({ id: family.id, name: family.familyName })}
+                                                            className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                                                        >
+                                                            <Search size={18} />
+                                                        </button>
+                                                        <button className="p-2 text-gray-400 hover:text-orange-600 hover:bg-orange-50 rounded-lg transition-colors">
+                                                            <Archive size={18} />
+                                                        </button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                        {Array.from({ length: emptyRows }).map((_, idx) => (
+                                            <tr key={`empty-${idx}`}>
+                                                <td colSpan={5} className="py-4">&nbsp;</td>
+                                            </tr>
+                                        ))}
+                                    </>
+                                )}
                             </tbody>
                         </table>
                     </div>
@@ -157,7 +206,7 @@ const FamilyListModal: React.FC<FamilyListModalProps> = ({ isOpen, onClose, hous
                     {/* Pagination */}
                     <div className="flex items-center justify-between mt-6">
                         <span className="text-[12px] text-gray-500 font-medium">
-                            Showing {filteredFamilies.length > 0 ? indexOfFirstItem + 1 : 0}-{Math.min(indexOfLastItem, filteredFamilies.length)} of {filteredFamilies.length}
+                            Showing {total > 0 ? indexOfFirstItem + 1 : 0}-{Math.min(indexOfLastItem, total)} of {total}
                         </span>
                         <div className="flex items-center gap-2">
                             <button
@@ -168,23 +217,30 @@ const FamilyListModal: React.FC<FamilyListModalProps> = ({ isOpen, onClose, hous
                                 <ChevronLeft size={14} /> Prev
                             </button>
                             <div className="flex gap-1">
-                                {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
-                                    <button
-                                        key={page}
-                                        onClick={() => setCurrentPage(page)}
-                                        className={`w-7 h-7 flex items-center justify-center rounded-lg text-[12px] font-bold transition-colors ${
-                                            currentPage === page 
-                                                ? 'bg-blue-600 text-white shadow-sm shadow-blue-200' 
-                                                : 'text-gray-500 hover:bg-gray-100'
-                                        }`}
-                                    >
-                                        {page}
-                                    </button>
-                                ))}
+                                {Array.from({ length: totalPages }, (_, i) => i + 1)
+                                    .filter(page => Math.abs(currentPage - page) < 3 || page === 1 || page === totalPages)
+                                    .map((number, index, array) => {
+                                        const isGap = index > 0 && number - array[index - 1] > 1;
+                                        return (
+                                            <React.Fragment key={number}>
+                                                {isGap && <span className="text-gray-300 text-xs self-end pb-1">...</span>}
+                                                <button
+                                                    onClick={() => setCurrentPage(number)}
+                                                    className={`w-7 h-7 flex items-center justify-center rounded-lg text-[12px] font-bold transition-colors ${
+                                                        currentPage === number
+                                                            ? 'bg-blue-600 text-white shadow-sm shadow-blue-200'
+                                                            : 'text-gray-500 hover:bg-gray-100'
+                                                    }`}
+                                                >
+                                                    {number}
+                                                </button>
+                                            </React.Fragment>
+                                        );
+                                    })}
                             </div>
                             <button
                                 onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-                                disabled={currentPage === totalPages}
+                                disabled={currentPage === totalPages || totalPages === 0}
                                 className="flex items-center gap-1 px-3 py-1.5 text-[12px] font-medium text-gray-500 hover:text-gray-900 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                             >
                                 Next <ChevronRight size={14} />
@@ -194,7 +250,7 @@ const FamilyListModal: React.FC<FamilyListModalProps> = ({ isOpen, onClose, hous
                 </div>
             </div>
 
-            <FamilyViewModal 
+            <FamilyViewModal
                 isOpen={!!selectedFamily}
                 onClose={() => setSelectedFamily(null)}
                 familyId={selectedFamily?.id || ''}
@@ -205,7 +261,7 @@ const FamilyListModal: React.FC<FamilyListModalProps> = ({ isOpen, onClose, hous
     );
 };
 
-const StatCard = ({ icon: Icon, label, value, color, bgColor }: any) => (
+const StatCard = ({ icon: Icon, label, value, color, bgColor }: { icon: React.ElementType; label: string; value: number; color: string; bgColor: string }) => (
     <div className="bg-white border border-gray-100 rounded-2xl p-5 flex items-center justify-between shadow-sm">
         <div className={`p-3 rounded-xl ${bgColor} ${color}`}>
             <Icon size={20} />
