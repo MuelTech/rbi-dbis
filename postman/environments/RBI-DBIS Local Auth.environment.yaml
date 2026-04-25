@@ -1,0 +1,14 @@
+name: RBI-DBIS Local Auth
+values:
+  - key: baseUrl
+    enabled: true
+    value: 'http://localhost:4000/api'
+  - key: qaUsername
+    enabled: true
+    value: qa_admin
+  - key: qaPassword
+    enabled: true
+    value: Rbi#QA2026!xK9m
+  - key: authToken
+    enabled: true
+    value: ''

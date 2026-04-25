@@ -31,11 +31,7 @@ interface FamilyMember {
     isSoloParent: boolean;
 }
 
-const BLOCK_LIMITS: Record<string, number> = {
-    '1': 51,
-    '2': 55,
-    '3': 50,
-};
+const HOUSEHOLD_LIMIT = 100;
 
 const BLOCK_OPTIONS = [
     { value: '1', label: 'Block 1' },
@@ -190,10 +186,10 @@ const AddResidentForm: React.FC<AddResidentFormProps> = ({ onCancel, setIsNaviga
     const [submitError, setSubmitError] = useState('');
 
     const householdOptions = React.useMemo(() => {
-        if (!formData.block || !BLOCK_LIMITS[formData.block]) return [];
-        return Array.from({ length: BLOCK_LIMITS[formData.block] }, (_, i) => ({
-            value: String(i + 1),
-            label: String(i + 1)
+        if (!formData.block) return [];
+        return Array.from({ length: HOUSEHOLD_LIMIT }, (_, i) => ({
+            value: String(i + 1).padStart(3, '0'),
+            label: String(i + 1).padStart(3, '0'),
         }));
     }, [formData.block]);
 

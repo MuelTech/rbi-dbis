@@ -34,6 +34,7 @@ model Household {
 
   families        Family[]
 
+  @@unique([blockId, brgyHouseholdNo], name: "block_household_no")
   @@map("households")
 }
 

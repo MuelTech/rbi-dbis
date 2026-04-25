@@ -1,35 +1,11 @@
-import React, { useState, useRef, useLayoutEffect, useEffect } from 'react';
+import React, { useState, useRef, useLayoutEffect, useEffect, useCallback } from 'react';
 import { Search, ChevronLeft, ChevronRight, ChevronDown, PawPrint } from 'lucide-react';
 import ContentCard from '@/components/ui/ContentCard';
 import FamilyListModal from '@/components/ui/FamilyListModal';
+import { householdsService } from '@/services/households';
+import type { HouseholdRow } from '@/services/households';
 
-interface HouseholdData {
-    id: string;
-    displayId: number;
-    block: string;
-    familyCount: number;
-    voterCount: number;
-    catCount: number;
-    dogCount: number;
-}
-
-const BLOCKS = ['Block 1', 'Block 2', 'Block 3'];
-
-let _seq = 0;
-const householdData: HouseholdData[] = BLOCKS.flatMap(block => 
-    Array.from({ length: 50 }, () => {
-        _seq++;
-        return {
-            id: `hh-mock-${_seq}`,
-            displayId: _seq,
-            block: block,
-            familyCount: Math.floor(Math.random() * 6) + 1,
-            voterCount: Math.floor(Math.random() * 4) + 1,
-            catCount: Math.floor(Math.random() * 5),
-            dogCount: Math.floor(Math.random() * 3),
-        };
-    })
-);
+const BLOCKS = ['1', '2', '3'];
 
 interface HouseholdProps {
     onShowSuccess?: (message: string) => void;
@@ -38,21 +14,25 @@ interface HouseholdProps {
 const Household: React.FC<HouseholdProps> = ({ onShowSuccess }) => {
     const [currentPage, setCurrentPage] = useState(1);
     const [searchQuery, setSearchQuery] = useState('');
-    const [selectedBlock, setSelectedBlock] = useState('Block 1');
+    const [debouncedSearch, setDebouncedSearch] = useState('');
+    const [selectedBlock, setSelectedBlock] = useState('1');
     const [isBlockMenuOpen, setIsBlockMenuOpen] = useState(false);
     const blockMenuTimer = useRef<NodeJS.Timeout | null>(null);
 
-    // Family Modal State
     const [isFamilyModalOpen, setIsFamilyModalOpen] = useState(false);
     const [selectedHouseholdId, setSelectedHouseholdId] = useState('');
 
     const [itemsPerPage, setItemsPerPage] = useState(10);
     const [rowHeight, setRowHeight] = useState(72);
 
+    const [households, setHouseholds] = useState<HouseholdRow[]>([]);
+    const [totalHouseholds, setTotalHouseholds] = useState(0);
+    const [totalPages, setTotalPages] = useState(0);
+    const [isLoading, setIsLoading] = useState(false);
+
     const containerRef = useRef<HTMLDivElement>(null);
     const headerRef = useRef<HTMLTableSectionElement>(null);
 
-    // Dynamic Layout Calculation
     useLayoutEffect(() => {
         if (!containerRef.current) return;
 
@@ -78,27 +58,42 @@ const Household: React.FC<HouseholdProps> = ({ onShowSuccess }) => {
     }, []);
 
     useEffect(() => {
-        const totalPages = Math.ceil(householdData.length / itemsPerPage);
-        if (totalPages > 0 && currentPage > totalPages) {
-            setCurrentPage(totalPages);
-        }
-    }, [itemsPerPage, currentPage]);
+        const timer = setTimeout(() => setDebouncedSearch(searchQuery), 300);
+        return () => clearTimeout(timer);
+    }, [searchQuery]);
 
-    // Reset page when block changes
     useEffect(() => {
         setCurrentPage(1);
-    }, [selectedBlock]);
+    }, [selectedBlock, debouncedSearch]);
 
-    const filteredData = householdData.filter(item => 
-        item.block === selectedBlock &&
-        item.id.toLowerCase().includes(searchQuery.toLowerCase())
-    );
+    const fetchHouseholds = useCallback(async () => {
+        setIsLoading(true);
+        try {
+            const result = await householdsService.list({
+                page: currentPage,
+                pageSize: itemsPerPage,
+                block: selectedBlock || undefined,
+                search: debouncedSearch || undefined,
+            });
+            setHouseholds(result.data);
+            setTotalHouseholds(result.meta.total);
+            setTotalPages(result.meta.totalPages);
+        } catch {
+            setHouseholds([]);
+            setTotalHouseholds(0);
+            setTotalPages(0);
+        } finally {
+            setIsLoading(false);
+        }
+    }, [currentPage, itemsPerPage, selectedBlock, debouncedSearch]);
 
-    const totalPages = Math.ceil(filteredData.length / itemsPerPage);
-    const indexOfLastItem = currentPage * itemsPerPage;
-    const indexOfFirstItem = indexOfLastItem - itemsPerPage;
-    const currentItems = filteredData.slice(indexOfFirstItem, indexOfLastItem);
-    const emptyRows = Math.max(0, itemsPerPage - currentItems.length);
+    useEffect(() => {
+        fetchHouseholds();
+    }, [fetchHouseholds]);
+
+    const indexOfFirstItem = (currentPage - 1) * itemsPerPage;
+    const indexOfLastItem = indexOfFirstItem + households.length;
+    const emptyRows = Math.max(0, itemsPerPage - households.length);
 
     const handlePageChange = (page: number) => {
         if (page >= 1 && page <= totalPages) {
@@ -120,8 +115,8 @@ const Household: React.FC<HouseholdProps> = ({ onShowSuccess }) => {
         }, 300);
     };
 
-    const totalCats = filteredData.reduce((sum, item) => sum + item.catCount, 0);
-    const totalDogs = filteredData.reduce((sum, item) => sum + item.dogCount, 0);
+    const totalCats = households.reduce((sum, item) => sum + item.catCount, 0);
+    const totalDogs = households.reduce((sum, item) => sum + item.dogCount, 0);
 
     return (
         <ContentCard>
@@ -135,7 +130,7 @@ const Household: React.FC<HouseholdProps> = ({ onShowSuccess }) => {
                         onMouseLeave={handleBlockMouseLeave}
                     >
                         <button className="flex items-center justify-between gap-2 px-4 py-2.5 bg-white border border-gray-200 rounded-xl text-[14px] font-medium text-gray-700 min-w-[140px] hover:bg-gray-50 transition-colors">
-                            {selectedBlock}
+                            Block {selectedBlock}
                             <ChevronDown size={16} className={`text-gray-400 transition-transform duration-200 ${isBlockMenuOpen ? 'rotate-180' : ''}`} />
                         </button>
 
@@ -150,7 +145,7 @@ const Household: React.FC<HouseholdProps> = ({ onShowSuccess }) => {
                                         }}
                                         className={`w-full text-left px-3 py-2 text-[13px] font-medium rounded-lg transition-colors ${selectedBlock === block ? 'bg-blue-50 text-blue-600' : 'text-gray-700 hover:bg-gray-50 hover:text-gray-900'}`}
                                     >
-                                        {block}
+                                        Block {block}
                                     </button>
                                 ))}
                             </div>
@@ -175,7 +170,7 @@ const Household: React.FC<HouseholdProps> = ({ onShowSuccess }) => {
                     <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-blue-300 w-4 h-4" />
                     <input
                         type="text"
-                        placeholder="Search transactions.."
+                        placeholder="Search households..."
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
                         className="pl-11 pr-4 py-2 bg-[#F9FAFB] rounded-xl text-[14px] text-gray-700 w-full lg:w-64 border border-transparent focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-500/5 transition-all placeholder-blue-300"
@@ -188,7 +183,7 @@ const Household: React.FC<HouseholdProps> = ({ onShowSuccess }) => {
                 <table className="w-full border-separate border-spacing-0 table-fixed">
                     <thead ref={headerRef} className="bg-white z-10 sticky top-0">
                         <tr className="border-b border-gray-50">
-                            <th className="w-[15%] text-left py-4 pl-8 pr-4 text-[14px] font-bold text-blue-500 whitespace-nowrap">Household ID</th>
+                            <th className="w-[15%] text-left py-4 pl-8 pr-4 text-[14px] font-bold text-blue-500 whitespace-nowrap">Household No.</th>
                             <th className="w-[15%] text-left py-4 px-4 text-[14px] font-bold text-blue-500 whitespace-nowrap">Family</th>
                             <th className="w-[15%] text-left py-4 px-4 text-[14px] font-bold text-blue-500 whitespace-nowrap">Voters</th>
                             <th className="w-[15%] text-left py-4 px-4 text-[14px] font-bold text-blue-500 whitespace-nowrap">Cats</th>
@@ -197,9 +192,9 @@ const Household: React.FC<HouseholdProps> = ({ onShowSuccess }) => {
                         </tr>
                     </thead>
                     <tbody className="bg-white">
-                        {currentItems.map((item) => (
+                        {households.map((item) => (
                             <tr key={item.id} className="hover:bg-gray-50/50 transition-colors" style={{ height: `${rowHeight}px` }}>
-                                <td className="pl-8 pr-4 text-[14px] text-gray-900 font-bold truncate">{String(item.displayId ?? 0).padStart(4, '0')}</td>
+                                <td className="pl-8 pr-4 text-[14px] text-gray-900 font-bold truncate">{item.brgyHouseholdNo.padStart(3, '0')}</td>
                                 <td className="px-4 text-[14px] text-gray-700 font-medium truncate">{item.familyCount}</td>
                                 <td className="px-4 text-[14px] text-gray-700 font-medium truncate">{item.voterCount}</td>
                                 <td className="px-4 text-[14px] text-gray-700 font-medium truncate">{item.catCount}</td>
@@ -229,7 +224,7 @@ const Household: React.FC<HouseholdProps> = ({ onShowSuccess }) => {
             {/* Pagination */}
             <div className="flex items-center justify-between p-6 border-t border-gray-50 shrink-0 bg-white">
                 <span className="text-[12px] text-gray-500 font-bold uppercase tracking-widest">
-                    Showing {filteredData.length > 0 ? indexOfFirstItem + 1 : 0}-{Math.min(indexOfLastItem, filteredData.length)} of {filteredData.length}
+                    Showing {totalHouseholds > 0 ? indexOfFirstItem + 1 : 0}-{Math.min(indexOfLastItem, totalHouseholds)} of {totalHouseholds}
                 </span>
                 <div className="flex items-center gap-1.5">
                     <button

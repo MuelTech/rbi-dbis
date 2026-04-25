@@ -13,6 +13,14 @@ export async function registerFamily(
       res.status(400).json({ error: "household.blockNumber and household.brgyHouseholdNo are required" });
       return;
     }
+
+    const hhNum = parseInt(String(household.brgyHouseholdNo), 10);
+    if (isNaN(hhNum) || hhNum < 1 || hhNum > 100) {
+      res.status(400).json({ error: "household.brgyHouseholdNo must be between 1 and 100" });
+      return;
+    }
+    household.brgyHouseholdNo = String(hhNum).padStart(3, "0");
+
     if (!address?.houseNo || !address?.streetName || !address?.alleyName) {
       res.status(400).json({ error: "address.houseNo, address.streetName, and address.alleyName are required" });
       return;
