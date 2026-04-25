@@ -28,6 +28,53 @@ export interface FamilyListParams {
   search?: string;
 }
 
+export interface FamilyMemberRow {
+  id: string;
+  displayId: number;
+  lastName: string;
+  firstName: string;
+  sex: string;
+  age: number;
+  voter: string;
+  status: string;
+}
+
+export interface FamilyDetail {
+  id: string;
+  displayId: number;
+  familyName: string;
+  household: { id: string; brgyHouseholdNo: string };
+  familyHead: {
+    id: string;
+    displayId: number;
+    firstName: string;
+    lastName: string;
+    fullName: string;
+    isVoter: boolean;
+    status: string;
+  };
+  address: { houseNo: string; streetName: string; alleyName: string };
+  pet: { numberOfCats: number; numberOfDogs: number; others: string };
+  vehicle: {
+    numberOfMotorcycles: number;
+    motorcyclePlateNumber: string;
+    numberOfVehicles: number;
+    vehiclePlateNumber: string;
+  };
+  members: FamilyMemberRow[];
+}
+
+export interface FamilyUpdatePayload {
+  address?: { houseNo: string; streetName: string; alleyName: string };
+  pet?: { numberOfCats: number; numberOfDogs: number; others: string };
+  vehicle?: {
+    numberOfMotorcycles: number;
+    motorcyclePlateNumber: string;
+    numberOfVehicles: number;
+    vehiclePlateNumber: string;
+  };
+}
+
 export const familiesService = {
   listByHousehold: (householdId: string, params: FamilyListParams = {}) => {
     const qs = new URLSearchParams();
@@ -39,4 +86,10 @@ export const familiesService = {
       `/households/${householdId}/families${query ? `?${query}` : ""}`
     );
   },
+
+  getById: (familyId: string) =>
+    api.get<FamilyDetail>(`/families/${familyId}`),
+
+  update: (familyId: string, payload: FamilyUpdatePayload) =>
+    api.put<FamilyDetail>(`/families/${familyId}`, payload),
 };

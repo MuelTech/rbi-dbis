@@ -1,12 +1,10 @@
-// TODO: Replace MOCK_MEMBERS and static formData with a real GET /api/families/:familyId
-// detail endpoint. The family list modal now uses live data, but this view modal still
-// relies on mock data until the family detail API is implemented.
-
-import React, { useEffect, useState, useRef } from 'react';
-import { X, User, Edit, Plus, FileText, CreditCard, Search, Trash2, PawPrint, Car, Save, ChevronDown } from 'lucide-react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
+import { X, User, Edit, Plus, FileText, CreditCard, Search, PawPrint, Car, Save, ChevronDown, Loader2 } from 'lucide-react';
 import AddMemberForm from '@/components/forms/AddMemberForm';
 import ResidentProfileModal from '@/components/ui/ResidentProfileModal';
 import { Resident } from '@/types';
+import { familiesService } from '@/services/families';
+import type { FamilyDetail, FamilyMemberRow } from '@/services/families';
 
 interface FamilyViewModalProps {
     isOpen: boolean;
@@ -17,52 +15,99 @@ interface FamilyViewModalProps {
     familyStatus?: 'Moveout' | 'Deceased';
 }
 
-// TODO: Remove once family detail endpoint is available
-const MOCK_MEMBERS = [
-    { id: '023', displayId: 23, lastName: 'Dela Cruz', firstName: 'Juan', sex: 'Male', age: 45, voter: 'Yes', status: 'Active' },
-    { id: '024', displayId: 24, lastName: 'Dela Cruz', firstName: 'Maria', sex: 'Female', age: 43, voter: 'Yes', status: 'Active' },
-    { id: '025', displayId: 25, lastName: 'Dela Cruz', firstName: 'Jose', sex: 'Male', age: 18, voter: 'No', status: 'Moveout' },
-    { id: '026', displayId: 26, lastName: 'Dela Cruz', firstName: 'Ana', sex: 'Female', age: 12, voter: 'No', status: 'Active' },
-    { id: '027', displayId: 27, lastName: 'Dela Cruz', firstName: 'Lola', sex: 'Female', age: 78, voter: 'Yes', status: 'Deceased' },
-];
+interface FormState {
+    // TODO: Family head reassignment deferred — relation constraints make it complex.
+    // Keeping familyHead read-only for this iteration.
+    familyHead: string;
+    houseNo: string;
+    streetName: string;
+    alley: string;
+    cats: string;
+    dogs: string;
+    others: string;
+    motorcycles: string;
+    motorcyclePlates: string;
+    otherVehicles: string;
+    otherVehiclePlates: string;
+}
+
+function formStateFromDetail(detail: FamilyDetail): FormState {
+    return {
+        familyHead: detail.familyHead.fullName,
+        houseNo: detail.address.houseNo,
+        streetName: detail.address.streetName,
+        alley: detail.address.alleyName,
+        cats: String(detail.pet.numberOfCats),
+        dogs: String(detail.pet.numberOfDogs),
+        others: detail.pet.others,
+        motorcycles: String(detail.vehicle.numberOfMotorcycles),
+        motorcyclePlates: detail.vehicle.motorcyclePlateNumber,
+        otherVehicles: String(detail.vehicle.numberOfVehicles),
+        otherVehiclePlates: detail.vehicle.vehiclePlateNumber,
+    };
+}
+
+const EMPTY_FORM: FormState = {
+    familyHead: '',
+    houseNo: '',
+    streetName: '',
+    alley: '',
+    cats: '0',
+    dogs: '0',
+    others: '',
+    motorcycles: '0',
+    motorcyclePlates: '',
+    otherVehicles: '0',
+    otherVehiclePlates: '',
+};
 
 const FamilyViewModal: React.FC<FamilyViewModalProps> = ({ isOpen, onClose, familyId, familyName, onShowSuccess, familyStatus }) => {
     const [isEditing, setIsEditing] = useState(false);
     const [viewMode, setViewMode] = useState<'view' | 'add'>('view');
     const [openDropdown, setOpenDropdown] = useState<string | null>(null);
     const dropdownRef = useRef<HTMLDivElement>(null);
-    const originalDataRef = useRef<typeof formData | null>(null);
-    
-    // Derived members based on familyStatus
-    const displayMembers = React.useMemo(() => {
+    const originalDataRef = useRef<FormState | null>(null);
+
+    const [familyDetail, setFamilyDetail] = useState<FamilyDetail | null>(null);
+    const [isLoading, setIsLoading] = useState(false);
+    const [isSaving, setIsSaving] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+
+    const [formData, setFormData] = useState<FormState>(EMPTY_FORM);
+
+    const displayMembers: FamilyMemberRow[] = React.useMemo(() => {
+        if (!familyDetail) return [];
         if (familyStatus === 'Moveout') {
-            return MOCK_MEMBERS.map(member => ({
-                ...member,
-                status: 'Moveout'
-            }));
+            return familyDetail.members.map(member => ({ ...member, status: 'Moveout' }));
         }
-        return MOCK_MEMBERS;
-    }, [familyStatus]);
+        return familyDetail.members;
+    }, [familyDetail, familyStatus]);
 
     const [selectedResident, setSelectedResident] = useState<Resident | null>(null);
     const [showResidentProfile, setShowResidentProfile] = useState(false);
 
-    const [formData, setFormData] = useState({
-        familyHead: `${familyName}, Juan`,
-        houseNo: '123-B',
-        streetName: 'Maharlika Street',
-        alley: 'Rosal Alley',
-        cats: '2',
-        dogs: '1',
-        others: 'Bird (1)',
-        motorcycles: '2',
-        motorcyclePlates: 'AB-1234, XY-9876, ZZZ-555',
-        otherVehicles: '1',
-        otherVehiclePlates: 'NCO-1345'
-    });
+    const fetchFamily = useCallback(async () => {
+        if (!familyId) return;
+        setIsLoading(true);
+        setError(null);
+        try {
+            const detail = await familiesService.getById(familyId);
+            setFamilyDetail(detail);
+            setFormData(formStateFromDetail(detail));
+        } catch (err: any) {
+            setError(err.message || 'Failed to load family details');
+        } finally {
+            setIsLoading(false);
+        }
+    }, [familyId]);
 
-    const handleViewResident = (member: any) => {
-        // Map the member data to match Resident type if needed
+    useEffect(() => {
+        if (isOpen && familyId) {
+            fetchFamily();
+        }
+    }, [isOpen, familyId, fetchFamily]);
+
+    const handleViewResident = (member: FamilyMemberRow) => {
         const residentData: Resident = {
             id: member.id,
             lastName: member.lastName,
@@ -88,11 +133,36 @@ const FamilyViewModal: React.FC<FamilyViewModalProps> = ({ isOpen, onClose, fami
         setIsEditing(false);
     };
 
-    const handleSaveClick = () => {
-        // API call to save data would go here
-        setIsEditing(false);
-        if (onShowSuccess) {
-            onShowSuccess('Update family details success');
+    const handleSaveClick = async () => {
+        if (!familyId) return;
+        setIsSaving(true);
+        try {
+            const updated = await familiesService.update(familyId, {
+                address: {
+                    houseNo: formData.houseNo,
+                    streetName: formData.streetName,
+                    alleyName: formData.alley,
+                },
+                pet: {
+                    numberOfCats: parseInt(formData.cats) || 0,
+                    numberOfDogs: parseInt(formData.dogs) || 0,
+                    others: formData.others,
+                },
+                vehicle: {
+                    numberOfMotorcycles: parseInt(formData.motorcycles) || 0,
+                    motorcyclePlateNumber: formData.motorcyclePlates,
+                    numberOfVehicles: parseInt(formData.otherVehicles) || 0,
+                    vehiclePlateNumber: formData.otherVehiclePlates,
+                },
+            });
+            setFamilyDetail(updated);
+            setFormData(formStateFromDetail(updated));
+            setIsEditing(false);
+            if (onShowSuccess) onShowSuccess('Update family details success');
+        } catch (err: any) {
+            setError(err.message || 'Failed to save family details');
+        } finally {
+            setIsSaving(false);
         }
     };
 
@@ -108,10 +178,6 @@ const FamilyViewModal: React.FC<FamilyViewModalProps> = ({ isOpen, onClose, fami
     }, []);
 
     useEffect(() => {
-        setFormData(prev => ({ ...prev, familyHead: `${familyName}, Juan` }));
-    }, [familyName]);
-
-    useEffect(() => {
         if (isOpen) {
             document.body.style.overflow = 'hidden';
         } else {
@@ -122,65 +188,28 @@ const FamilyViewModal: React.FC<FamilyViewModalProps> = ({ isOpen, onClose, fami
         };
     }, [isOpen]);
 
-    // Reset view mode when modal closes
     useEffect(() => {
         if (!isOpen) {
             setViewMode('view');
             setIsEditing(false);
+            setError(null);
+            setFamilyDetail(null);
         }
     }, [isOpen]);
 
-    const renderField = (label: string, key: keyof typeof formData, colSpan: string = "", type: 'text' | 'select' = 'text') => (
+    const renderField = (label: string, key: keyof FormState, colSpan: string = "", readOnly = false) => (
         <div className={`space-y-1.5 ${colSpan}`}>
             <label className="text-[12px] font-bold text-gray-500">{label}</label>
-            {isEditing ? (
-                type === 'select' ? (
-                    <div className="relative" ref={dropdownRef}>
-                        <button
-                            type="button"
-                            onClick={() => setOpenDropdown(openDropdown === key ? null : key)}
-                            className={`w-full px-3 py-2.5 bg-white border rounded-xl text-[13px] font-medium text-gray-900 text-left flex items-center justify-between transition-all ${
-                                openDropdown === key ? 'border-blue-500 ring-1 ring-blue-500' : 'border-gray-200 hover:border-gray-300'
-                            }`}
-                        >
-                            <span>{formData[key]}</span>
-                            <ChevronDown size={16} className={`text-gray-400 transition-transform duration-200 ${openDropdown === key ? 'rotate-180' : ''}`} />
-                        </button>
-                        
-                        {openDropdown === key && (
-                            <div className="absolute z-20 top-full left-0 right-0 mt-1 bg-white border border-gray-100 rounded-xl shadow-lg py-1 max-h-60 overflow-auto animate-in fade-in zoom-in-95 duration-100">
-                                {displayMembers.map(member => {
-                                    const fullName = `${member.lastName}, ${member.firstName}`;
-                                    return (
-                                        <button
-                                            key={member.id}
-                                            type="button"
-                                            onClick={() => {
-                                                setFormData({ ...formData, [key]: fullName });
-                                                setOpenDropdown(null);
-                                            }}
-                                            className={`w-full px-3 py-2 text-[13px] text-left hover:bg-gray-50 transition-colors ${
-                                                formData[key] === fullName ? 'text-blue-600 font-bold bg-blue-50' : 'text-gray-700 font-medium'
-                                            }`}
-                                        >
-                                            {fullName}
-                                        </button>
-                                    );
-                                })}
-                            </div>
-                        )}
-                    </div>
-                ) : (
-                    <input
-                        type="text"
-                        value={formData[key]}
-                        onChange={(e) => setFormData({ ...formData, [key]: e.target.value })}
-                        className="w-full px-3 py-2.5 bg-white border border-gray-200 rounded-xl text-[13px] font-medium text-gray-900 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all"
-                    />
-                )
+            {isEditing && !readOnly ? (
+                <input
+                    type="text"
+                    value={formData[key]}
+                    onChange={(e) => setFormData({ ...formData, [key]: e.target.value })}
+                    className="w-full px-3 py-2.5 bg-white border border-gray-200 rounded-xl text-[13px] font-medium text-gray-900 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all"
+                />
             ) : (
                 <div className="px-3 py-2.5 bg-gray-50 border border-gray-100 rounded-xl text-[13px] font-medium text-gray-700">
-                    {formData[key]}
+                    {formData[key] || '\u00A0'}
                 </div>
             )}
         </div>
@@ -201,6 +230,7 @@ const FamilyViewModal: React.FC<FamilyViewModalProps> = ({ isOpen, onClose, fami
                             onCancel={() => setViewMode('view')}
                             onSubmit={() => {
                                 setViewMode('view');
+                                fetchFamily();
                                 if (onShowSuccess) onShowSuccess('New family member added successfully');
                             }}
                         />
@@ -217,147 +247,181 @@ const FamilyViewModal: React.FC<FamilyViewModalProps> = ({ isOpen, onClose, fami
 
                         {/* Content */}
                         <div className="flex-1 overflow-y-auto p-6 custom-scrollbar min-h-0">
-                            {/* Family Details Section */}
-                            <div className="mb-8">
-                                <div className="flex items-center justify-between mb-4">
-                                    <div className="flex items-center gap-2">
-                                        <div className="p-1.5 bg-blue-50 rounded-lg text-blue-600">
-                                            <User size={18} />
-                                        </div>
-                                        <h3 className="text-[15px] font-bold text-gray-900">Family Details</h3>
-                                    </div>
-                                    {isEditing ? (
-                                        <div className="flex items-center gap-2">
-                                            <button 
-                                                onClick={handleCancelClick}
-                                                className="px-4 py-1.5 text-[13px] font-medium text-gray-500 hover:text-gray-700 transition-colors"
-                                            >
-                                                Cancel
-                                            </button>
-                                            <button 
-                                                onClick={handleSaveClick}
-                                                className="flex items-center gap-2 px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-[13px] font-bold transition-colors shadow-sm shadow-blue-200"
-                                            >
-                                                <Save size={14} />
-                                                Save
-                                            </button>
-                                        </div>
-                                    ) : (
-                                        <button 
-                                            onClick={handleEditClick}
-                                            className="flex items-center gap-2 px-3 py-1.5 border border-gray-200 rounded-lg text-[13px] font-medium text-gray-600 hover:bg-gray-50 transition-colors"
-                                        >
-                                            <Edit size={14} />
-                                            Edit Info
-                                        </button>
-                                    )}
+                            {isLoading ? (
+                                <div className="flex flex-col items-center justify-center py-20 gap-3">
+                                    <Loader2 size={32} className="text-blue-500 animate-spin" />
+                                    <p className="text-sm text-gray-500 font-medium">Loading family details...</p>
                                 </div>
-                                
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                                    {renderField("Family Head", "familyHead", "", "select")}
-                                    {renderField("House No.", "houseNo")}
-                                    {renderField("Street Name", "streetName")}
-                                </div>
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                    {renderField("Alley", "alley")}
-                                </div>
-                            </div>
-
-                            {/* Pets Section */}
-                            <div className="mb-8">
-                                <div className="flex items-center gap-2 mb-4">
-                                    <PawPrint size={16} className="text-gray-400" />
-                                    <h3 className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">PETS</h3>
-                                </div>
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                    {renderField("Cats", "cats")}
-                                    {renderField("Dogs", "dogs")}
-                                    {renderField("Others", "others")}
-                                </div>
-                            </div>
-
-                            {/* Vehicle Information Section */}
-                            <div className="mb-8">
-                                <div className="flex items-center gap-2 mb-4">
-                                    <Car size={16} className="text-gray-400" />
-                                    <h3 className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">VEHICLE INFORMATION</h3>
-                                </div>
-                                <div className="grid grid-cols-12 gap-4 mb-4">
-                                    {renderField("Motorcycles", "motorcycles", "col-span-3")}
-                                    {renderField("Plate Numbers", "motorcyclePlates", "col-span-9")}
-                                </div>
-                                <div className="grid grid-cols-12 gap-4">
-                                    {renderField("Other Vehicles", "otherVehicles", "col-span-3")}
-                                    {renderField("Plate Numbers", "otherVehiclePlates", "col-span-9")}
-                                </div>
-                            </div>
-
-                            {/* Family Members Section */}
-                            <div>
-                                <div className="flex items-center justify-between mb-4">
-                                    <div className="flex items-center gap-2">
-                                        <div className="p-1.5 bg-green-50 rounded-lg text-green-600">
-                                            <User size={18} />
-                                        </div>
-                                        <h3 className="text-[15px] font-bold text-gray-900">Family Members</h3>
-                                    </div>
-                                    <button 
-                                        onClick={() => setViewMode('add')}
-                                        className="flex items-center gap-2 px-3 py-1.5 bg-[#10B981] hover:bg-green-600 text-white rounded-lg text-[13px] font-bold transition-colors shadow-sm shadow-green-200"
+                            ) : error && !familyDetail ? (
+                                <div className="flex flex-col items-center justify-center py-20 gap-3">
+                                    <p className="text-sm text-red-500 font-medium">{error}</p>
+                                    <button
+                                        onClick={fetchFamily}
+                                        className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-[13px] font-bold transition-colors"
                                     >
-                                        <Plus size={14} />
-                                        Add New Member
+                                        Retry
                                     </button>
                                 </div>
+                            ) : (
+                                <>
+                                    {error && (
+                                        <div className="mb-4 px-4 py-3 bg-red-50 border border-red-200 rounded-xl text-[13px] text-red-600 font-medium">
+                                            {error}
+                                        </div>
+                                    )}
 
-                                <div className="border border-gray-100 rounded-2xl overflow-hidden">
-                                    <table className="w-full">
-                                        <thead className="bg-gray-50/50 border-b border-gray-100">
-                                            <tr>
-                                                <th className="text-left py-4 pl-6 pr-4 text-[12px] font-bold text-blue-500 tracking-wider">Resident ID</th>
-                                                <th className="text-left py-4 px-4 text-[12px] font-bold text-blue-500 tracking-wider">Last Name</th>
-                                                <th className="text-left py-4 px-4 text-[12px] font-bold text-blue-500 tracking-wider">First Name</th>
-                                                <th className="text-left py-4 px-4 text-[12px] font-bold text-blue-500 tracking-wider">Sex</th>
-                                                <th className="text-left py-4 px-4 text-[12px] font-bold text-blue-500 tracking-wider">Age</th>
-                                                <th className="text-left py-4 px-4 text-[12px] font-bold text-blue-500 tracking-wider">Voter</th>
-                                                <th className="text-left py-4 px-4 text-[12px] font-bold text-blue-500 tracking-wider">Status</th>
-                                                <th className="text-center py-4 px-6 text-[12px] font-bold text-blue-500 tracking-wider">Action</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody className="divide-y divide-gray-50">
-                                            {displayMembers.map((member) => (
-                                                <tr key={member.id} className="hover:bg-gray-50/50 transition-colors">
-                                                    <td className="py-3 pl-6 pr-4 text-[13px] font-bold text-gray-900">{String(member.displayId ?? 0).padStart(4, '0')}</td>
-                                                    <td className="py-3 px-4 text-[13px] font-medium text-gray-700">{member.lastName}</td>
-                                                    <td className="py-3 px-4 text-[13px] font-medium text-gray-700">{member.firstName}</td>
-                                                    <td className="py-3 px-4 text-[13px] text-gray-600">{member.sex}</td>
-                                                    <td className="py-3 px-4 text-[13px] text-gray-600">{member.age}</td>
-                                                    <td className="py-3 px-4 text-[13px] text-gray-600">{member.voter}</td>
-                                                    <td className="py-3 px-4">
-                                                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-md text-[11px] font-bold ${
-                                                            member.status === 'Active' ? 'text-green-700 bg-green-50' :
-                                                            member.status === 'Deceased' ? 'text-red-700 bg-red-50' :
-                                                            'text-orange-700 bg-orange-50'
-                                                        }`}>
-                                                            {member.status}
-                                                        </span>
-                                                    </td>
-                                                    <td className="py-3 px-6">
-                                                        <div className="flex items-center justify-center gap-2">
-                                                            <button 
-                                                                onClick={() => handleViewResident(member)}
-                                                                className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                                                            >
-                                                                <Search size={16} />
-                                                            </button>
-                                                        </div>
-                                                    </td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </div>
+                                    {/* Family Details Section */}
+                                    <div className="mb-8">
+                                        <div className="flex items-center justify-between mb-4">
+                                            <div className="flex items-center gap-2">
+                                                <div className="p-1.5 bg-blue-50 rounded-lg text-blue-600">
+                                                    <User size={18} />
+                                                </div>
+                                                <h3 className="text-[15px] font-bold text-gray-900">Family Details</h3>
+                                            </div>
+                                            {isEditing ? (
+                                                <div className="flex items-center gap-2">
+                                                    <button 
+                                                        onClick={handleCancelClick}
+                                                        disabled={isSaving}
+                                                        className="px-4 py-1.5 text-[13px] font-medium text-gray-500 hover:text-gray-700 transition-colors disabled:opacity-50"
+                                                    >
+                                                        Cancel
+                                                    </button>
+                                                    <button 
+                                                        onClick={handleSaveClick}
+                                                        disabled={isSaving}
+                                                        className="flex items-center gap-2 px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-[13px] font-bold transition-colors shadow-sm shadow-blue-200 disabled:opacity-50"
+                                                    >
+                                                        {isSaving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+                                                        {isSaving ? 'Saving...' : 'Save'}
+                                                    </button>
+                                                </div>
+                                            ) : (
+                                                <button 
+                                                    onClick={handleEditClick}
+                                                    className="flex items-center gap-2 px-3 py-1.5 border border-gray-200 rounded-lg text-[13px] font-medium text-gray-600 hover:bg-gray-50 transition-colors"
+                                                >
+                                                    <Edit size={14} />
+                                                    Edit Info
+                                                </button>
+                                            )}
+                                        </div>
+                                        
+                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                                            {/* TODO: Family head reassignment deferred — keeping read-only */}
+                                            {renderField("Family Head", "familyHead", "", true)}
+                                            {renderField("House No.", "houseNo")}
+                                            {renderField("Street Name", "streetName")}
+                                        </div>
+                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                            {renderField("Alley", "alley")}
+                                        </div>
+                                    </div>
+
+                                    {/* Pets Section */}
+                                    <div className="mb-8">
+                                        <div className="flex items-center gap-2 mb-4">
+                                            <PawPrint size={16} className="text-gray-400" />
+                                            <h3 className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">PETS</h3>
+                                        </div>
+                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                            {renderField("Cats", "cats")}
+                                            {renderField("Dogs", "dogs")}
+                                            {renderField("Others", "others")}
+                                        </div>
+                                    </div>
+
+                                    {/* Vehicle Information Section */}
+                                    <div className="mb-8">
+                                        <div className="flex items-center gap-2 mb-4">
+                                            <Car size={16} className="text-gray-400" />
+                                            <h3 className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">VEHICLE INFORMATION</h3>
+                                        </div>
+                                        <div className="grid grid-cols-12 gap-4 mb-4">
+                                            {renderField("Motorcycles", "motorcycles", "col-span-3")}
+                                            {renderField("Plate Numbers", "motorcyclePlates", "col-span-9")}
+                                        </div>
+                                        <div className="grid grid-cols-12 gap-4">
+                                            {renderField("Other Vehicles", "otherVehicles", "col-span-3")}
+                                            {renderField("Plate Numbers", "otherVehiclePlates", "col-span-9")}
+                                        </div>
+                                    </div>
+
+                                    {/* Family Members Section */}
+                                    <div>
+                                        <div className="flex items-center justify-between mb-4">
+                                            <div className="flex items-center gap-2">
+                                                <div className="p-1.5 bg-green-50 rounded-lg text-green-600">
+                                                    <User size={18} />
+                                                </div>
+                                                <h3 className="text-[15px] font-bold text-gray-900">Family Members</h3>
+                                            </div>
+                                            <button 
+                                                onClick={() => setViewMode('add')}
+                                                className="flex items-center gap-2 px-3 py-1.5 bg-[#10B981] hover:bg-green-600 text-white rounded-lg text-[13px] font-bold transition-colors shadow-sm shadow-green-200"
+                                            >
+                                                <Plus size={14} />
+                                                Add New Member
+                                            </button>
+                                        </div>
+
+                                        <div className="border border-gray-100 rounded-2xl overflow-hidden">
+                                            <table className="w-full">
+                                                <thead className="bg-gray-50/50 border-b border-gray-100">
+                                                    <tr>
+                                                        <th className="text-left py-4 pl-6 pr-4 text-[12px] font-bold text-blue-500 tracking-wider">Resident ID</th>
+                                                        <th className="text-left py-4 px-4 text-[12px] font-bold text-blue-500 tracking-wider">Last Name</th>
+                                                        <th className="text-left py-4 px-4 text-[12px] font-bold text-blue-500 tracking-wider">First Name</th>
+                                                        <th className="text-left py-4 px-4 text-[12px] font-bold text-blue-500 tracking-wider">Sex</th>
+                                                        <th className="text-left py-4 px-4 text-[12px] font-bold text-blue-500 tracking-wider">Age</th>
+                                                        <th className="text-left py-4 px-4 text-[12px] font-bold text-blue-500 tracking-wider">Voter</th>
+                                                        <th className="text-left py-4 px-4 text-[12px] font-bold text-blue-500 tracking-wider">Status</th>
+                                                        <th className="text-center py-4 px-6 text-[12px] font-bold text-blue-500 tracking-wider">Action</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="divide-y divide-gray-50">
+                                                    {displayMembers.length === 0 ? (
+                                                        <tr>
+                                                            <td colSpan={8} className="py-8 text-center text-sm text-gray-400">No members found</td>
+                                                        </tr>
+                                                    ) : (
+                                                        displayMembers.map((member) => (
+                                                            <tr key={member.id} className="hover:bg-gray-50/50 transition-colors">
+                                                                <td className="py-3 pl-6 pr-4 text-[13px] font-bold text-gray-900">{String(member.displayId ?? 0).padStart(3, '0')}</td>
+                                                                <td className="py-3 px-4 text-[13px] font-medium text-gray-700">{member.lastName}</td>
+                                                                <td className="py-3 px-4 text-[13px] font-medium text-gray-700">{member.firstName}</td>
+                                                                <td className="py-3 px-4 text-[13px] text-gray-600">{member.sex}</td>
+                                                                <td className="py-3 px-4 text-[13px] text-gray-600">{member.age}</td>
+                                                                <td className="py-3 px-4 text-[13px] text-gray-600">{member.voter}</td>
+                                                                <td className="py-3 px-4">
+                                                                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-md text-[11px] font-bold ${
+                                                                        member.status === 'Active' ? 'text-green-700 bg-green-50' :
+                                                                        member.status === 'Deceased' ? 'text-red-700 bg-red-50' :
+                                                                        'text-orange-700 bg-orange-50'
+                                                                    }`}>
+                                                                        {member.status}
+                                                                    </span>
+                                                                </td>
+                                                                <td className="py-3 px-6">
+                                                                    <div className="flex items-center justify-center gap-2">
+                                                                        <button 
+                                                                            onClick={() => handleViewResident(member)}
+                                                                            className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                                                                        >
+                                                                            <Search size={16} />
+                                                                        </button>
+                                                                    </div>
+                                                                </td>
+                                                            </tr>
+                                                        ))
+                                                    )}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                </>
+                            )}
                         </div>
 
                         {/* Footer */}
