@@ -97,6 +97,12 @@ export interface AddFamilyMemberResponse extends FamilyMemberRow {
   relationshipType: string;
 }
 
+export interface ReassignHeadPayload {
+  newHeadResidentId: string;
+  previousHeadRelationshipType: string;
+  previousHeadRelationshipOther?: string;
+}
+
 export const familiesService = {
   listByHousehold: (householdId: string, params: FamilyListParams = {}) => {
     const qs = new URLSearchParams();
@@ -120,4 +126,7 @@ export const familiesService = {
       `/families/${familyId}/members`,
       payload
     ),
+
+  reassignHead: (familyId: string, payload: ReassignHeadPayload) =>
+    api.patch<FamilyDetail>(`/families/${familyId}/head`, payload),
 };

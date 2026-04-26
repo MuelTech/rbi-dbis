@@ -4,7 +4,7 @@ import AddMemberForm from '@/components/forms/AddMemberForm';
 import ResidentProfileModal from '@/components/ui/ResidentProfileModal';
 import { Resident } from '@/types';
 import { familiesService } from '@/services/families';
-import type { FamilyDetail, FamilyMemberRow, AddFamilyMemberPayload } from '@/services/families';
+import type { FamilyDetail, FamilyMemberRow, AddFamilyMemberPayload, ReassignHeadPayload } from '@/services/families';
 
 interface FamilyViewModalProps {
     isOpen: boolean;
@@ -16,8 +16,6 @@ interface FamilyViewModalProps {
 }
 
 interface FormState {
-    // TODO: Family head reassignment deferred — relation constraints make it complex.
-    // Keeping familyHead read-only for this iteration.
     familyHead: string;
     houseNo: string;
     streetName: string;
@@ -61,6 +59,8 @@ const EMPTY_FORM: FormState = {
     otherVehiclePlates: '',
 };
 
+const RELATIONSHIP_OPTIONS = ['Spouse', 'Parent', 'Child', 'Sibling', 'Other'] as const;
+
 const FamilyViewModal: React.FC<FamilyViewModalProps> = ({ isOpen, onClose, familyId, familyName, onShowSuccess, familyStatus }) => {
     const [isEditing, setIsEditing] = useState(false);
     const [viewMode, setViewMode] = useState<'view' | 'add'>('view');
@@ -74,6 +74,13 @@ const FamilyViewModal: React.FC<FamilyViewModalProps> = ({ isOpen, onClose, fami
     const [error, setError] = useState<string | null>(null);
 
     const [formData, setFormData] = useState<FormState>(EMPTY_FORM);
+
+    const [selectedHeadId, setSelectedHeadId] = useState<string>('');
+    const [prevHeadRelType, setPrevHeadRelType] = useState<string>('');
+    const [prevHeadRelOther, setPrevHeadRelOther] = useState<string>('');
+    const [headValidationError, setHeadValidationError] = useState<string | null>(null);
+
+    const headChanged = familyDetail ? selectedHeadId !== familyDetail.familyHead.id : false;
 
     const displayMembers: FamilyMemberRow[] = React.useMemo(() => {
         if (!familyDetail) return [];
@@ -94,6 +101,7 @@ const FamilyViewModal: React.FC<FamilyViewModalProps> = ({ isOpen, onClose, fami
             const detail = await familiesService.getById(familyId);
             setFamilyDetail(detail);
             setFormData(formStateFromDetail(detail));
+            setSelectedHeadId(detail.familyHead.id);
         } catch (err: any) {
             setError(err.message || 'Failed to load family details');
         } finally {
@@ -123,6 +131,10 @@ const FamilyViewModal: React.FC<FamilyViewModalProps> = ({ isOpen, onClose, fami
 
     const handleEditClick = () => {
         originalDataRef.current = { ...formData };
+        if (familyDetail) setSelectedHeadId(familyDetail.familyHead.id);
+        setPrevHeadRelType('');
+        setPrevHeadRelOther('');
+        setHeadValidationError(null);
         setIsEditing(true);
     };
 
@@ -130,13 +142,41 @@ const FamilyViewModal: React.FC<FamilyViewModalProps> = ({ isOpen, onClose, fami
         if (originalDataRef.current) {
             setFormData(originalDataRef.current);
         }
+        if (familyDetail) setSelectedHeadId(familyDetail.familyHead.id);
+        setPrevHeadRelType('');
+        setPrevHeadRelOther('');
+        setHeadValidationError(null);
         setIsEditing(false);
     };
 
     const handleSaveClick = async () => {
         if (!familyId) return;
+
+        if (headChanged) {
+            if (!prevHeadRelType) {
+                setHeadValidationError('Please select a relationship for the previous head');
+                return;
+            }
+            if (prevHeadRelType === 'Other' && !prevHeadRelOther.trim()) {
+                setHeadValidationError('Please specify the relationship');
+                return;
+            }
+        }
+        setHeadValidationError(null);
+
         setIsSaving(true);
         try {
+            if (headChanged) {
+                const payload: ReassignHeadPayload = {
+                    newHeadResidentId: selectedHeadId,
+                    previousHeadRelationshipType: prevHeadRelType,
+                };
+                if (prevHeadRelType === 'Other') {
+                    payload.previousHeadRelationshipOther = prevHeadRelOther.trim();
+                }
+                await familiesService.reassignHead(familyId, payload);
+            }
+
             const updated = await familiesService.update(familyId, {
                 address: {
                     houseNo: formData.houseNo,
@@ -157,8 +197,11 @@ const FamilyViewModal: React.FC<FamilyViewModalProps> = ({ isOpen, onClose, fami
             });
             setFamilyDetail(updated);
             setFormData(formStateFromDetail(updated));
+            setSelectedHeadId(updated.familyHead.id);
+            setPrevHeadRelType('');
+            setPrevHeadRelOther('');
             setIsEditing(false);
-            if (onShowSuccess) onShowSuccess('Update family details success');
+            if (onShowSuccess) onShowSuccess(headChanged ? 'Family head reassigned successfully' : 'Update family details success');
         } catch (err: any) {
             setError(err.message || 'Failed to save family details');
         } finally {
@@ -194,6 +237,10 @@ const FamilyViewModal: React.FC<FamilyViewModalProps> = ({ isOpen, onClose, fami
             setIsEditing(false);
             setError(null);
             setFamilyDetail(null);
+            setSelectedHeadId('');
+            setPrevHeadRelType('');
+            setPrevHeadRelOther('');
+            setHeadValidationError(null);
         }
     }, [isOpen]);
 
@@ -310,11 +357,91 @@ const FamilyViewModal: React.FC<FamilyViewModalProps> = ({ isOpen, onClose, fami
                                         </div>
                                         
                                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                                            {/* TODO: Family head reassignment deferred — keeping read-only */}
-                                            {renderField("Family Head", "familyHead", "", true)}
+                                            <div className="space-y-1.5">
+                                                <label className="text-[12px] font-bold text-gray-500">Family Head</label>
+                                                {isEditing && familyDetail ? (
+                                                    <div className="relative" ref={dropdownRef}>
+                                                        <select
+                                                            value={selectedHeadId}
+                                                            onChange={(e) => {
+                                                                setSelectedHeadId(e.target.value);
+                                                                setPrevHeadRelType('');
+                                                                setPrevHeadRelOther('');
+                                                                setHeadValidationError(null);
+                                                            }}
+                                                            className="w-full px-3 py-2.5 bg-white border border-gray-200 rounded-xl text-[13px] font-medium text-gray-900 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all appearance-none pr-8"
+                                                        >
+                                                            {familyDetail.members.map((m) => (
+                                                                <option key={m.id} value={m.id}>
+                                                                    {m.lastName}, {m.firstName}
+                                                                </option>
+                                                            ))}
+                                                        </select>
+                                                        <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                                                    </div>
+                                                ) : (
+                                                    <div className="px-3 py-2.5 bg-gray-50 border border-gray-100 rounded-xl text-[13px] font-medium text-gray-700">
+                                                        {formData.familyHead || '\u00A0'}
+                                                    </div>
+                                                )}
+                                            </div>
                                             {renderField("House No.", "houseNo")}
                                             {renderField("Street Name", "streetName")}
                                         </div>
+
+                                        {isEditing && headChanged && (
+                                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                                                <div className="space-y-1.5">
+                                                    <label className="text-[12px] font-bold text-gray-500">
+                                                        Previous Head's Relationship to New Head <span className="text-red-500">*</span>
+                                                    </label>
+                                                    <div className="relative">
+                                                        <select
+                                                            value={prevHeadRelType}
+                                                            onChange={(e) => {
+                                                                setPrevHeadRelType(e.target.value);
+                                                                if (e.target.value !== 'Other') setPrevHeadRelOther('');
+                                                                setHeadValidationError(null);
+                                                            }}
+                                                            className={`w-full px-3 py-2.5 bg-white border rounded-xl text-[13px] font-medium text-gray-900 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all appearance-none pr-8 ${
+                                                                headValidationError && !prevHeadRelType ? 'border-red-500' : 'border-gray-200'
+                                                            }`}
+                                                        >
+                                                            <option value="">Select relationship...</option>
+                                                            {RELATIONSHIP_OPTIONS.map((opt) => (
+                                                                <option key={opt} value={opt}>{opt}</option>
+                                                            ))}
+                                                        </select>
+                                                        <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                                                    </div>
+                                                </div>
+                                                {prevHeadRelType === 'Other' && (
+                                                    <div className="space-y-1.5">
+                                                        <label className="text-[12px] font-bold text-gray-500">
+                                                            Specify Relationship <span className="text-red-500">*</span>
+                                                        </label>
+                                                        <input
+                                                            type="text"
+                                                            value={prevHeadRelOther}
+                                                            onChange={(e) => {
+                                                                setPrevHeadRelOther(e.target.value);
+                                                                setHeadValidationError(null);
+                                                            }}
+                                                            placeholder="e.g. Grandparent, Uncle"
+                                                            className={`w-full px-3 py-2.5 bg-white border rounded-xl text-[13px] font-medium text-gray-900 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all ${
+                                                                headValidationError && prevHeadRelType === 'Other' && !prevHeadRelOther.trim() ? 'border-red-500' : 'border-gray-200'
+                                                            }`}
+                                                        />
+                                                    </div>
+                                                )}
+                                                {headValidationError && (
+                                                    <div className="flex items-end">
+                                                        <p className="text-[12px] text-red-500 font-medium pb-2.5">{headValidationError}</p>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
+
                                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                             {renderField("Alley", "alley")}
                                         </div>

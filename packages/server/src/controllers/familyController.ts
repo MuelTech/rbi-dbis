@@ -305,3 +305,97 @@ export async function addFamilyMember(
     next(err);
   }
 }
+
+export async function reassignHead(
+  req: Request,
+  res: Response,
+  next: NextFunction
+) {
+  try {
+    const familyId = req.params.familyId as string;
+    const {
+      newHeadResidentId,
+      previousHeadRelationshipType,
+      previousHeadRelationshipOther,
+    } = req.body;
+
+    if (!newHeadResidentId) {
+      return res.status(400).json({ error: "newHeadResidentId is required" });
+    }
+
+    const family = await prisma.family.findUnique({
+      where: { id: familyId },
+      include: {
+        members: { select: { residentId: true, id: true } },
+      },
+    });
+
+    if (!family) {
+      return res.status(404).json({ error: "Family not found" });
+    }
+
+    if (newHeadResidentId === family.headPersonId) {
+      const detail = await buildFamilyDetail(familyId);
+      return res.json(detail);
+    }
+
+    if (!previousHeadRelationshipType) {
+      return res
+        .status(400)
+        .json({ error: "previousHeadRelationshipType is required when changing head" });
+    }
+
+    if (
+      previousHeadRelationshipType === "Other" &&
+      !previousHeadRelationshipOther
+    ) {
+      return res.status(400).json({
+        error: "previousHeadRelationshipOther is required when relationship is Other",
+      });
+    }
+
+    const memberIds = family.members.map((m) => m.residentId);
+    const belongsToFamily =
+      newHeadResidentId === family.headPersonId ||
+      memberIds.includes(newHeadResidentId);
+
+    if (!belongsToFamily) {
+      return res
+        .status(400)
+        .json({ error: "New head must belong to this family" });
+    }
+
+    const oldHeadId = family.headPersonId;
+    const relationshipLabel =
+      previousHeadRelationshipType === "Other"
+        ? previousHeadRelationshipOther!
+        : previousHeadRelationshipType;
+
+    await prisma.$transaction(async (tx) => {
+      const existingMember = family.members.find(
+        (m) => m.residentId === newHeadResidentId
+      );
+      if (existingMember) {
+        await tx.familyMember.delete({ where: { id: existingMember.id } });
+      }
+
+      await tx.familyMember.create({
+        data: {
+          familyId,
+          residentId: oldHeadId,
+          relationshipType: relationshipLabel,
+        },
+      });
+
+      await tx.family.update({
+        where: { id: familyId },
+        data: { headPersonId: newHeadResidentId },
+      });
+    });
+
+    const detail = await buildFamilyDetail(familyId);
+    res.json(detail);
+  } catch (err) {
+    next(err);
+  }
+}
