@@ -1,5 +1,5 @@
 import type { Request, Response, NextFunction } from "express";
-import { prisma } from "@rbi/db";
+import { prisma, Sex } from "@rbi/db";
 
 function computeAge(dateOfBirth: Date | null): number {
   if (!dateOfBirth) return 0;
@@ -191,6 +191,116 @@ export async function updateFamily(
 
     const detail = await buildFamilyDetail(familyId);
     res.json(detail);
+  } catch (err) {
+    next(err);
+  }
+}
+
+const OCCUPATION_TO_TYPE: Record<string, string> = {
+  Employed: "Employed",
+  "Self-Employed": "Self-Employed",
+  Unemployed: "Unemployed",
+  Student: "Student",
+};
+
+export async function addFamilyMember(
+  req: Request,
+  res: Response,
+  next: NextFunction
+) {
+  try {
+    const familyId = req.params.familyId as string;
+
+    const family = await prisma.family.findUnique({
+      where: { id: familyId },
+      select: { id: true },
+    });
+    if (!family) return res.status(404).json({ error: "Family not found" });
+
+    const {
+      relationshipType,
+      firstName,
+      lastName,
+      middleName,
+      suffix,
+      dateOfBirth,
+      placeOfBirth,
+      civilStatus,
+      sex,
+      occupation,
+      contactNumber,
+      educationLevel,
+      isVoter,
+      isPwd,
+      isSoloParent,
+    } = req.body;
+
+    const missing: string[] = [];
+    if (!relationshipType) missing.push("relationshipType");
+    if (!firstName) missing.push("firstName");
+    if (!lastName) missing.push("lastName");
+    if (!sex) missing.push("sex");
+    if (missing.length > 0) {
+      return res
+        .status(400)
+        .json({ error: `Missing required fields: ${missing.join(", ")}` });
+    }
+
+    if (sex !== "Male" && sex !== "Female") {
+      return res.status(400).json({ error: "sex must be Male or Female" });
+    }
+
+    const occupationType = occupation
+      ? OCCUPATION_TO_TYPE[occupation] ?? occupation
+      : null;
+
+    const studentType =
+      occupation === "Student" && educationLevel ? educationLevel : null;
+
+    const result = await prisma.$transaction(async (tx) => {
+      const resident = await tx.resident.create({
+        data: {
+          firstName,
+          lastName,
+          middleName: middleName || null,
+          suffix: suffix || null,
+          dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : null,
+          placeOfBirth: placeOfBirth || null,
+          civilStatus: civilStatus || null,
+          sex: sex as Sex,
+          occupationType,
+          studentType,
+          contactNumber: contactNumber || null,
+          isVoter: isVoter === true,
+          isPwd: isPwd === true,
+          isSoloParent: isSoloParent === true,
+        },
+      });
+
+      const member = await tx.familyMember.create({
+        data: {
+          familyId,
+          residentId: resident.id,
+          relationshipType,
+        },
+        include: { resident: true },
+      });
+
+      return member;
+    });
+
+    const r = result.resident;
+    res.status(201).json({
+      id: r.id,
+      displayId: r.displayId,
+      lastName: r.lastName,
+      firstName: r.firstName,
+      sex: r.sex,
+      age: computeAge(r.dateOfBirth),
+      voter: r.isVoter ? "Yes" : "No",
+      status: STATUS_MAP_TO_UI[r.statusType] ?? "Active",
+      relationshipType: result.relationshipType,
+    });
   } catch (err) {
     next(err);
   }

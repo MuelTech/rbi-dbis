@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { User, Users, Briefcase, GraduationCap, FileText, ChevronLeft, Check, ChevronDown } from 'lucide-react';
+import { User, Users, Briefcase, GraduationCap, FileText, ChevronLeft, Check, ChevronDown, Loader2 } from 'lucide-react';
 import ConfirmationModal from '@/components/ui/ConfirmationModal';
+import type { AddFamilyMemberPayload } from '@/services/families';
 
 interface AddMemberFormProps {
     onCancel: () => void;
-    onSubmit: () => void;
+    onSubmit: (payload: AddFamilyMemberPayload) => Promise<void>;
 }
 
 const SUFFIX_OPTIONS = [
@@ -131,6 +132,8 @@ const AddMemberForm: React.FC<AddMemberFormProps> = ({ onCancel, onSubmit }) => 
 
     const [formData, setFormData] = useState(initialFormData);
     const [showConfirmation, setShowConfirmation] = useState(false);
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [submitError, setSubmitError] = useState<string | null>(null);
 
     const handleBack = () => {
         const isDirty = JSON.stringify(formData) !== JSON.stringify(initialFormData);
@@ -163,9 +166,33 @@ const AddMemberForm: React.FC<AddMemberFormProps> = ({ onCancel, onSubmit }) => 
         return Object.keys(newErrors).length === 0;
     };
 
-    const handleSubmit = () => {
-        if (validate()) {
-            onSubmit();
+    const handleSubmit = async () => {
+        if (!validate()) return;
+        setSubmitError(null);
+        setIsSubmitting(true);
+        try {
+            const payload: AddFamilyMemberPayload = {
+                relationshipType: formData.relationship,
+                firstName: formData.firstName,
+                lastName: formData.lastName,
+                middleName: formData.middleName || undefined,
+                suffix: formData.suffix || undefined,
+                dateOfBirth: formData.birthDate || undefined,
+                placeOfBirth: formData.birthPlace || undefined,
+                civilStatus: formData.civilStatus || undefined,
+                sex: formData.sex,
+                occupation: formData.occupation || undefined,
+                contactNumber: formData.contactNumber || undefined,
+                educationLevel: formData.isStudent === 'Yes' ? formData.educationLevel || undefined : undefined,
+                isVoter: formData.isVoter,
+                isPwd: formData.isPwd,
+                isSoloParent: formData.isSoloParent,
+            };
+            await onSubmit(payload);
+        } catch (err: any) {
+            setSubmitError(err.message || 'Failed to add member');
+        } finally {
+            setIsSubmitting(false);
         }
     };
 
@@ -182,6 +209,12 @@ const AddMemberForm: React.FC<AddMemberFormProps> = ({ onCancel, onSubmit }) => 
             {/* Content */}
             <div className="flex-1 overflow-y-auto p-6 custom-scrollbar min-h-0">
                 <div className="w-full space-y-6">
+
+                    {submitError && (
+                        <div className="px-4 py-3 bg-red-50 border border-red-200 rounded-xl text-[13px] text-red-600 font-medium">
+                            {submitError}
+                        </div>
+                    )}
                     
                     {/* Relationship */}
                     <div className="bg-purple-50/30 border border-purple-100 rounded-xl p-6">
@@ -422,15 +455,18 @@ const AddMemberForm: React.FC<AddMemberFormProps> = ({ onCancel, onSubmit }) => 
             <div className="p-6 border-t border-gray-100 bg-white flex items-center justify-end gap-3">
                 <button 
                     onClick={handleBack}
-                    className="px-5 py-2.5 border border-gray-200 text-gray-600 hover:bg-gray-50 rounded-xl font-bold text-[13px] transition-colors"
+                    disabled={isSubmitting}
+                    className="px-5 py-2.5 border border-gray-200 text-gray-600 hover:bg-gray-50 rounded-xl font-bold text-[13px] transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
                 >
                     Cancel
                 </button>
                 <button 
                     onClick={handleSubmit}
-                    className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-[13px] shadow-lg shadow-blue-200 transition-all active:scale-95"
+                    disabled={isSubmitting}
+                    className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-[13px] shadow-lg shadow-blue-200 transition-all active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed"
                 >
-                    Submit
+                    {isSubmitting ? <Loader2 size={16} className="animate-spin" /> : null}
+                    {isSubmitting ? 'Submitting...' : 'Submit'}
                 </button>
             </div>
 

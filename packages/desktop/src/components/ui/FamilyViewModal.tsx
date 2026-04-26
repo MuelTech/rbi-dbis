@@ -4,7 +4,7 @@ import AddMemberForm from '@/components/forms/AddMemberForm';
 import ResidentProfileModal from '@/components/ui/ResidentProfileModal';
 import { Resident } from '@/types';
 import { familiesService } from '@/services/families';
-import type { FamilyDetail, FamilyMemberRow } from '@/services/families';
+import type { FamilyDetail, FamilyMemberRow, AddFamilyMemberPayload } from '@/services/families';
 
 interface FamilyViewModalProps {
     isOpen: boolean;
@@ -228,7 +228,8 @@ const FamilyViewModal: React.FC<FamilyViewModalProps> = ({ isOpen, onClose, fami
                     <div className="flex-1 min-h-0 flex flex-col w-full">
                         <AddMemberForm 
                             onCancel={() => setViewMode('view')}
-                            onSubmit={() => {
+                            onSubmit={async (payload: AddFamilyMemberPayload) => {
+                                await familiesService.addMember(familyId, payload);
                                 setViewMode('view');
                                 fetchFamily();
                                 if (onShowSuccess) onShowSuccess('New family member added successfully');

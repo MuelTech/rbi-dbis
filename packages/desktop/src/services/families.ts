@@ -75,6 +75,28 @@ export interface FamilyUpdatePayload {
   };
 }
 
+export interface AddFamilyMemberPayload {
+  relationshipType: string;
+  firstName: string;
+  lastName: string;
+  middleName?: string;
+  suffix?: string;
+  dateOfBirth?: string;
+  placeOfBirth?: string;
+  civilStatus?: string;
+  sex: string;
+  occupation?: string;
+  contactNumber?: string;
+  educationLevel?: string;
+  isVoter?: boolean;
+  isPwd?: boolean;
+  isSoloParent?: boolean;
+}
+
+export interface AddFamilyMemberResponse extends FamilyMemberRow {
+  relationshipType: string;
+}
+
 export const familiesService = {
   listByHousehold: (householdId: string, params: FamilyListParams = {}) => {
     const qs = new URLSearchParams();
@@ -92,4 +114,10 @@ export const familiesService = {
 
   update: (familyId: string, payload: FamilyUpdatePayload) =>
     api.put<FamilyDetail>(`/families/${familyId}`, payload),
+
+  addMember: (familyId: string, payload: AddFamilyMemberPayload) =>
+    api.post<AddFamilyMemberResponse>(
+      `/families/${familyId}/members`,
+      payload
+    ),
 };
