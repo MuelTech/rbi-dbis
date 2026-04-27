@@ -6,3 +6,5 @@ export { familiesService } from "./families";
 export { documentsService } from "./documents";
 export { usersService } from "./users";
 export { activityLogsService } from "./activityLogs";
+export { dashboardService } from "./dashboard";
+export type { ResidentDemographics } from "./dashboard";

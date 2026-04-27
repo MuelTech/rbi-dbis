@@ -502,7 +502,7 @@ const Residents: React.FC<ResidentsProps> = ({ setIsNavigationBlocked, onShowSuc
                     <tbody className="bg-white">
                         {residents.map((resident) => (
                             <tr key={resident.id} className="hover:bg-gray-50/50 transition-colors" style={{ height: `${rowHeight}px` }}>
-                                <td className="pl-8 pr-4 text-[14px] text-gray-900 font-bold truncate">{String(resident.displayId ?? 0).padStart(4, '0')}</td>
+                                <td className="pl-8 pr-4 text-[14px] text-gray-900 font-bold truncate">{String(resident.displayId ?? 0).padStart(3, '0')}</td>
                                 <td className="px-4 text-[14px] text-gray-700 font-medium truncate">{resident.lastName}</td>
                                 <td className="px-4 text-[14px] text-gray-700 font-medium truncate">{resident.firstName}</td>
                                 <td className="px-4 text-[14px] text-gray-600 truncate">{resident.sex}</td>
