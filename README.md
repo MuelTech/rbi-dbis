@@ -39,8 +39,7 @@ pnpm dev:desktop
 
 ```
 rbi-dbis/
-├── .npmrc                    # node-linker=hoisted (required for Electron)
-├── pnpm-workspace.yaml
+├── pnpm-workspace.yaml       # nodeLinker: hoisted (required for Electron)
 ├── package.json              # root scripts
 ├── packages/
 │   ├── db/                   # @rbi/db
