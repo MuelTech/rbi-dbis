@@ -1,5 +1,6 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { X, Search, ChevronLeft, ChevronRight, Archive, Bike, Car, Cat, Dog, Users } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { X, Search, ChevronLeft, ChevronRight, Archive, Bike, Car, Cat, Dog, Users, AlertTriangle } from 'lucide-react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import FamilyViewModal from '@/components/ui/FamilyViewModal';
 import { familiesService } from '@/services/families';
 import type { FamilyRow, FamilySummary } from '@/services/families';
@@ -12,18 +13,14 @@ interface FamilyListModalProps {
 }
 
 const FamilyListModal: React.FC<FamilyListModalProps> = ({ isOpen, onClose, householdId, onShowSuccess }) => {
+    const queryClient = useQueryClient();
     const [currentPage, setCurrentPage] = useState(1);
     const [searchQuery, setSearchQuery] = useState('');
     const [debouncedSearch, setDebouncedSearch] = useState('');
     const [selectedFamily, setSelectedFamily] = useState<{ id: string; name: string } | null>(null);
     const itemsPerPage = 10;
 
-    const [families, setFamilies] = useState<FamilyRow[]>([]);
-    const [total, setTotal] = useState(0);
-    const [totalPages, setTotalPages] = useState(0);
-    const [summary, setSummary] = useState<FamilySummary>({ motorcycles: 0, vehicles: 0, cats: 0, dogs: 0 });
-    const [householdNo, setHouseholdNo] = useState('');
-    const [isLoading, setIsLoading] = useState(false);
+    const [archiveTarget, setArchiveTarget] = useState<{ id: string; name: string } | null>(null);
 
     useEffect(() => {
         if (isOpen) {
@@ -50,40 +47,42 @@ const FamilyListModal: React.FC<FamilyListModalProps> = ({ isOpen, onClose, hous
             setSearchQuery('');
             setDebouncedSearch('');
             setCurrentPage(1);
-            setFamilies([]);
-            setSummary({ motorcycles: 0, vehicles: 0, cats: 0, dogs: 0 });
-            setHouseholdNo('');
         }
     }, [isOpen]);
 
-    const fetchFamilies = useCallback(async () => {
-        if (!householdId) return;
-        setIsLoading(true);
-        try {
-            const result = await familiesService.listByHousehold(householdId, {
-                page: currentPage,
-                pageSize: itemsPerPage,
-                search: debouncedSearch || undefined,
-            });
-            setFamilies(result.data);
-            setTotal(result.meta.total);
-            setTotalPages(result.meta.totalPages);
-            setSummary(result.summary);
-            setHouseholdNo(result.householdNo);
-        } catch {
-            setFamilies([]);
-            setTotal(0);
-            setTotalPages(0);
-        } finally {
-            setIsLoading(false);
-        }
-    }, [householdId, currentPage, debouncedSearch]);
+    const { data, isLoading } = useQuery({
+        queryKey: ['families', { householdId, page: currentPage, pageSize: itemsPerPage, search: debouncedSearch }],
+        queryFn: () => familiesService.listByHousehold(householdId, {
+            page: currentPage,
+            pageSize: itemsPerPage,
+            search: debouncedSearch || undefined,
+        }),
+        enabled: isOpen && !!householdId,
+    });
 
-    useEffect(() => {
-        if (isOpen && householdId) {
-            fetchFamilies();
-        }
-    }, [isOpen, fetchFamilies]);
+    const families = data?.data ?? [];
+    const total = data?.meta.total ?? 0;
+    const totalPages = data?.meta.totalPages ?? 0;
+    const summary: FamilySummary = data?.summary ?? { motorcycles: 0, vehicles: 0, cats: 0, dogs: 0 };
+    const householdNo = data?.householdNo ?? '';
+
+    const archiveMutation = useMutation({
+        mutationFn: (familyId: string) => familiesService.archive(familyId),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['families'] });
+            setArchiveTarget(null);
+            if (onShowSuccess) onShowSuccess('Family archived successfully');
+        },
+        onError: () => {
+            setArchiveTarget(null);
+            if (onShowSuccess) onShowSuccess('Failed to archive family');
+        },
+    });
+
+    const handleArchive = () => {
+        if (!archiveTarget) return;
+        archiveMutation.mutate(archiveTarget.id);
+    };
 
     if (!isOpen) return null;
 
@@ -178,14 +177,16 @@ const FamilyListModal: React.FC<FamilyListModalProps> = ({ isOpen, onClose, hous
                                                 <td className="py-4 px-4 text-[14px] text-gray-600">{family.voterCount}</td>
                                                 <td className="py-4 px-8">
                                                     <div className="flex items-center justify-center gap-2">
-                                                        {/* TODO: Wire to family detail endpoint when available */}
                                                         <button
                                                             onClick={() => setSelectedFamily({ id: family.id, name: family.familyName })}
                                                             className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                                                         >
                                                             <Search size={18} />
                                                         </button>
-                                                        <button className="p-2 text-gray-400 hover:text-orange-600 hover:bg-orange-50 rounded-lg transition-colors">
+                                                        <button
+                                                            onClick={() => setArchiveTarget({ id: family.id, name: family.familyName })}
+                                                            className="p-2 text-gray-400 hover:text-orange-600 hover:bg-orange-50 rounded-lg transition-colors"
+                                                        >
                                                             <Archive size={18} />
                                                         </button>
                                                     </div>
@@ -252,11 +253,67 @@ const FamilyListModal: React.FC<FamilyListModalProps> = ({ isOpen, onClose, hous
 
             <FamilyViewModal
                 isOpen={!!selectedFamily}
-                onClose={() => setSelectedFamily(null)}
+                onClose={() => {
+                    setSelectedFamily(null);
+                    queryClient.invalidateQueries({ queryKey: ['families'] });
+                }}
                 familyId={selectedFamily?.id || ''}
                 familyName={selectedFamily?.name || ''}
                 onShowSuccess={onShowSuccess}
             />
+
+            {/* Archive Confirmation Modal */}
+            {archiveTarget && (
+                <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/20 backdrop-blur-sm">
+                    <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in duration-200">
+                        <div className="flex items-start justify-between p-6 pb-2">
+                            <div className="flex items-center gap-3">
+                                <div className="w-8 h-8 rounded-full bg-orange-100 flex items-center justify-center shrink-0">
+                                    <AlertTriangle size={20} className="text-orange-500" />
+                                </div>
+                                <h3 className="text-xl font-bold text-gray-900">Archive Family</h3>
+                            </div>
+                            <button
+                                onClick={() => setArchiveTarget(null)}
+                                className="text-gray-400 hover:text-gray-600 transition-colors"
+                            >
+                                <X size={24} />
+                            </button>
+                        </div>
+                        <div className="px-6 py-2">
+                            <p className="text-gray-600 text-[15px] leading-relaxed">
+                                Are you sure you want to archive <span className="font-bold text-gray-900">{archiveTarget.name}</span>? This family will be moved to the archived list and will no longer appear in the active household view.
+                            </p>
+                        </div>
+                        <div className="p-6 flex items-center justify-end gap-3">
+                            <button
+                                onClick={() => setArchiveTarget(null)}
+                                disabled={archiveMutation.isPending}
+                                className="px-4 py-2.5 rounded-lg border border-gray-200 text-gray-700 font-bold text-[14px] hover:bg-gray-50 transition-colors disabled:opacity-50"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={handleArchive}
+                                disabled={archiveMutation.isPending}
+                                className="px-4 py-2.5 rounded-lg bg-orange-600 hover:bg-orange-700 text-white font-bold text-[14px] transition-colors shadow-lg shadow-orange-200 disabled:opacity-50 flex items-center gap-2"
+                            >
+                                {archiveMutation.isPending ? (
+                                    <>
+                                        <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                        Archiving...
+                                    </>
+                                ) : (
+                                    <>
+                                        <Archive size={16} />
+                                        Archive Family
+                                    </>
+                                )}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

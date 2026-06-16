@@ -1,24 +1,12 @@
-import React, { useEffect, useState, useRef, useCallback } from 'react';
+import React from 'react';
 import { Users, Home, User, Vote, Mars, Venus, UsersRound, Loader2 } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
 import { StatCardProps } from '@/types';
-import { dashboardService, ResidentDemographics } from '@/services/dashboard';
-
-const REFRESH_INDICATOR_DELAY_MS = 180;
+import { dashboardService } from '@/services/dashboard';
 
 interface StatsGridProps {
   selectedBlock?: string;
 }
-
-const EMPTY: ResidentDemographics = {
-  totalPopulation: 0,
-  totalHousehold: 0,
-  totalFamily: 0,
-  seniorCitizen: 0,
-  pwd: 0,
-  voters: 0,
-  male: 0,
-  female: 0,
-};
 
 function formatNumber(n: number): string {
   return n.toLocaleString();
@@ -46,114 +34,58 @@ const StatCard: React.FC<StatCardProps & { loading?: boolean }> = ({ title, valu
   </div>
 );
 
+const EMPTY = {
+  totalPopulation: 0,
+  totalHousehold: 0,
+  totalFamily: 0,
+  seniorCitizen: 0,
+  pwd: 0,
+  voters: 0,
+  male: 0,
+  female: 0,
+};
+
 const StatsGrid: React.FC<StatsGridProps> = ({ selectedBlock = 'All' }) => {
-  const cacheRef = useRef<Record<string, ResidentDemographics>>({});
-  const [data, setData] = useState<ResidentDemographics>(EMPTY);
-  const [initialLoading, setInitialLoading] = useState(true);
-  const [showRefreshing, setShowRefreshing] = useState(false);
-  const [refreshError, setRefreshError] = useState<string | null>(null);
-  const hasDataRef = useRef(false);
-  const indicatorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const key = blockKey(selectedBlock);
+  const param = key === 'All' ? undefined : key;
 
-  const clearIndicatorTimer = useCallback(() => {
-    if (indicatorTimerRef.current !== null) {
-      clearTimeout(indicatorTimerRef.current);
-      indicatorTimerRef.current = null;
-    }
-  }, []);
+  const { data, isLoading, isFetching, error } = useQuery({
+    queryKey: ['demographics', selectedBlock],
+    queryFn: () => dashboardService.getResidentDemographics(param),
+    staleTime: 60_000,
+  });
 
-  const fetchBlock = useCallback((block: string, cancelled: () => boolean) => {
-    const key = blockKey(block);
-    const param = key === 'All' ? undefined : key;
-
-    const cached = cacheRef.current[key];
-    if (cached) {
-      setData(cached);
-      if (!hasDataRef.current) {
-        hasDataRef.current = true;
-        setInitialLoading(false);
-      }
-    }
-
-    clearIndicatorTimer();
-    setRefreshError(null);
-
-    if (hasDataRef.current) {
-      indicatorTimerRef.current = setTimeout(() => {
-        if (!cancelled()) setShowRefreshing(true);
-      }, REFRESH_INDICATOR_DELAY_MS);
-    }
-
-    dashboardService
-      .getResidentDemographics(param)
-      .then((res) => {
-        if (cancelled()) return;
-        cacheRef.current[key] = res;
-        setData(res);
-        if (!hasDataRef.current) {
-          hasDataRef.current = true;
-          setInitialLoading(false);
-        }
-      })
-      .catch((err) => {
-        if (cancelled()) return;
-        const msg = err instanceof Error ? err.message : 'Failed to load demographics';
-        if (!hasDataRef.current) {
-          setInitialLoading(false);
-        }
-        setRefreshError(msg);
-      })
-      .finally(() => {
-        if (cancelled()) return;
-        clearIndicatorTimer();
-        setShowRefreshing(false);
-      });
-  }, [clearIndicatorTimer]);
-
-  useEffect(() => {
-    let cancelled = false;
-    fetchBlock(selectedBlock, () => cancelled);
-    return () => {
-      cancelled = true;
-      clearIndicatorTimer();
-    };
-  }, [selectedBlock, fetchBlock, clearIndicatorTimer]);
+  const statsData = data ?? EMPTY;
 
   const stats = [
-    { title: 'Total Population', value: formatNumber(data.totalPopulation), icon: Users, bgColor: 'bg-blue-50', iconColor: 'text-blue-500' },
-    { title: 'Total Household', value: formatNumber(data.totalHousehold), icon: Home, bgColor: 'bg-indigo-50', iconColor: 'text-indigo-500' },
-    { title: 'Total Family', value: formatNumber(data.totalFamily), icon: UsersRound, bgColor: 'bg-purple-50', iconColor: 'text-purple-400' },
-    { title: 'Senior Citizen', value: formatNumber(data.seniorCitizen), icon: User, bgColor: 'bg-blue-50', iconColor: 'text-blue-500' },
-    { title: 'PWD', value: formatNumber(data.pwd), icon: Users, bgColor: 'bg-blue-50', iconColor: 'text-blue-500' },
-    { title: 'Voters', value: formatNumber(data.voters), icon: Vote, bgColor: 'bg-blue-50', iconColor: 'text-blue-500' },
-    { title: 'Male', value: formatNumber(data.male), icon: Mars, bgColor: 'bg-blue-50', iconColor: 'text-blue-500' },
-    { title: 'Female', value: formatNumber(data.female), icon: Venus, bgColor: 'bg-purple-50', iconColor: 'text-purple-500' },
+    { title: 'Total Population', value: formatNumber(statsData.totalPopulation), icon: Users, bgColor: 'bg-blue-50', iconColor: 'text-blue-500' },
+    { title: 'Total Household', value: formatNumber(statsData.totalHousehold), icon: Home, bgColor: 'bg-indigo-50', iconColor: 'text-indigo-500' },
+    { title: 'Total Family', value: formatNumber(statsData.totalFamily), icon: UsersRound, bgColor: 'bg-purple-50', iconColor: 'text-purple-400' },
+    { title: 'Senior Citizen', value: formatNumber(statsData.seniorCitizen), icon: User, bgColor: 'bg-blue-50', iconColor: 'text-blue-500' },
+    { title: 'PWD', value: formatNumber(statsData.pwd), icon: Users, bgColor: 'bg-blue-50', iconColor: 'text-blue-500' },
+    { title: 'Voters', value: formatNumber(statsData.voters), icon: Vote, bgColor: 'bg-blue-50', iconColor: 'text-blue-500' },
+    { title: 'Male', value: formatNumber(statsData.male), icon: Mars, bgColor: 'bg-blue-50', iconColor: 'text-blue-500' },
+    { title: 'Female', value: formatNumber(statsData.female), icon: Venus, bgColor: 'bg-purple-50', iconColor: 'text-purple-500' },
   ];
 
   return (
     <div className="relative mb-[clamp(1rem,2vh,2rem)]">
-      {showRefreshing && (
+      {isFetching && !isLoading && (
         <div className="absolute -top-1 right-0 flex items-center gap-1.5 text-gray-400 text-xs font-medium z-10">
           <Loader2 className="w-3.5 h-3.5 animate-spin" />
           <span>Updating…</span>
         </div>
       )}
 
-      {refreshError && !initialLoading && (
+      {error && !isLoading && data && (
         <div className="mb-3 px-4 py-2.5 bg-red-50 border border-red-200 rounded-xl text-red-600 text-xs font-medium flex items-center justify-between">
           <span>Could not refresh stats. Showing cached data.</span>
-          <button
-            onClick={() => setRefreshError(null)}
-            className="ml-3 text-red-400 hover:text-red-600 font-bold text-sm leading-none"
-          >
-            ×
-          </button>
         </div>
       )}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-[clamp(0.75rem,1.25vw,1.25rem)]">
         {stats.map((stat) => (
-          <StatCard key={stat.title} {...stat} loading={initialLoading} />
+          <StatCard key={stat.title} {...stat} loading={isLoading} />
         ))}
       </div>
     </div>

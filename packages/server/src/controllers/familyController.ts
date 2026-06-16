@@ -196,6 +196,58 @@ export async function updateFamily(
   }
 }
 
+export async function archiveFamily(
+  req: Request,
+  res: Response,
+  next: NextFunction
+) {
+  try {
+    const familyId = req.params.familyId as string;
+
+    const family = await prisma.family.findUnique({
+      where: { id: familyId },
+      select: {
+        id: true,
+        isArchived: true,
+        headPersonId: true,
+        members: { select: { residentId: true } },
+      },
+    });
+
+    if (!family) {
+      return res.status(404).json({ error: "Family not found" });
+    }
+
+    if (family.isArchived) {
+      return res.status(400).json({ error: "Family is already archived" });
+    }
+
+    const residentIds = [
+      family.headPersonId,
+      ...family.members.map((m) => m.residentId),
+    ];
+
+    await prisma.$transaction(async (tx) => {
+      await tx.resident.updateMany({
+        where: {
+          id: { in: residentIds },
+          statusType: { not: "Deceased" },
+        },
+        data: { statusType: "MovedOut" },
+      });
+
+      await tx.family.update({
+        where: { id: familyId },
+        data: { isArchived: true },
+      });
+    });
+
+    res.json({ message: "Family archived successfully" });
+  } catch (err) {
+    next(err);
+  }
+}
+
 const OCCUPATION_TO_TYPE: Record<string, string> = {
   Employed: "Employed",
   "Self-Employed": "Self-Employed",

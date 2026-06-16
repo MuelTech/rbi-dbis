@@ -129,4 +129,7 @@ export const familiesService = {
 
   reassignHead: (familyId: string, payload: ReassignHeadPayload) =>
     api.patch<FamilyDetail>(`/families/${familyId}/head`, payload),
+
+  archive: (familyId: string) =>
+    api.patch(`/families/${familyId}/archive`, {}),
 };

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useLayoutEffect, useCallback } from 'react';
 import { Plus, Search, ChevronDown, ChevronLeft, ChevronRight, UserPlus, Upload, Filter, RotateCcw } from 'lucide-react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Resident } from '@/types';
 import ContentCard from '@/components/ui/ContentCard';
 import ResidentProfileModal from '@/components/ui/ResidentProfileModal';
@@ -15,6 +16,7 @@ interface ResidentsProps {
 }
 
 const Residents: React.FC<ResidentsProps> = ({ setIsNavigationBlocked, onShowSuccess }) => {
+    const queryClient = useQueryClient();
     const [viewMode, setViewMode] = useState<'list' | 'add'>('list');
     const [currentPage, setCurrentPage] = useState(1);
     const [isAgeAccordionOpen, setIsAgeAccordionOpen] = useState(false);
@@ -59,11 +61,6 @@ const Residents: React.FC<ResidentsProps> = ({ setIsNavigationBlocked, onShowSuc
     const [toastMessage, setToastMessage] = useState('');
     const [showToast, setShowToast] = useState(false);
 
-    // API-backed residents state
-    const [residents, setResidents] = useState<Resident[]>([]);
-    const [totalResidents, setTotalResidents] = useState(0);
-    const [totalPages, setTotalPages] = useState(0);
-    const [isLoading, setIsLoading] = useState(false);
     const [debouncedSearch, setDebouncedSearch] = useState('');
 
     // Reset Add Resident Menu when switching views
@@ -79,7 +76,6 @@ const Residents: React.FC<ResidentsProps> = ({ setIsNavigationBlocked, onShowSuc
             clearTimeout(filterMenuTimer.current);
             filterMenuTimer.current = null;
         }
-        // Sync temp filters with active filters when opening
         setTempFilters(activeFilters);
         setIsFilterMenuOpen(true);
     };
@@ -185,37 +181,27 @@ const Residents: React.FC<ResidentsProps> = ({ setIsNavigationBlocked, onShowSuc
         return '';
     }, [activeFilters.voter]);
 
-    const fetchResidents = useCallback(async () => {
-        setIsLoading(true);
-        try {
-            const result = await residentsService.list({
-                page: currentPage,
-                pageSize: itemsPerPage,
-                search: debouncedSearch || undefined,
-                status: selectedStatuses.length > 0 ? selectedStatuses : undefined,
-                sex: activeFilters.sex.length > 0 ? activeFilters.sex : undefined,
-                voter: resolveVoterParam() || undefined,
-            });
-            setResidents(result.data);
-            setTotalResidents(result.meta.total);
-            setTotalPages(result.meta.totalPages);
-        } catch {
-            setResidents([]);
-            setTotalResidents(0);
-            setTotalPages(0);
-        } finally {
-            setIsLoading(false);
-        }
-    }, [currentPage, itemsPerPage, debouncedSearch, selectedStatuses, activeFilters.sex, resolveVoterParam]);
-
-    useEffect(() => {
-        if (viewMode === 'list') fetchResidents();
-    }, [fetchResidents, viewMode]);
-
     // Reset page when filters change
     useEffect(() => {
         setCurrentPage(1);
     }, [selectedStatuses, activeFilters, debouncedSearch]);
+
+    const { data, isLoading } = useQuery({
+        queryKey: ['residents', { page: currentPage, pageSize: itemsPerPage, search: debouncedSearch, status: selectedStatuses, sex: activeFilters.sex, voter: resolveVoterParam() }],
+        queryFn: () => residentsService.list({
+            page: currentPage,
+            pageSize: itemsPerPage,
+            search: debouncedSearch || undefined,
+            status: selectedStatuses.length > 0 ? selectedStatuses : undefined,
+            sex: activeFilters.sex.length > 0 ? activeFilters.sex : undefined,
+            voter: resolveVoterParam() || undefined,
+        }),
+        enabled: viewMode === 'list',
+    });
+
+    const residents = data?.data ?? [];
+    const totalResidents = data?.meta.total ?? 0;
+    const totalPages = data?.meta.totalPages ?? 0;
 
     const indexOfFirstItem = (currentPage - 1) * itemsPerPage;
     const indexOfLastItem = indexOfFirstItem + residents.length;
@@ -500,40 +486,52 @@ const Residents: React.FC<ResidentsProps> = ({ setIsNavigationBlocked, onShowSuc
                         </tr>
                     </thead>
                     <tbody className="bg-white">
-                        {residents.map((resident) => (
-                            <tr key={resident.id} className="hover:bg-gray-50/50 transition-colors" style={{ height: `${rowHeight}px` }}>
-                                <td className="pl-8 pr-4 text-[14px] text-gray-900 font-bold truncate">{String(resident.displayId ?? 0).padStart(3, '0')}</td>
-                                <td className="px-4 text-[14px] text-gray-700 font-medium truncate">{resident.lastName}</td>
-                                <td className="px-4 text-[14px] text-gray-700 font-medium truncate">{resident.firstName}</td>
-                                <td className="px-4 text-[14px] text-gray-600 truncate">{resident.sex}</td>
-                                <td className="px-4 text-[14px] text-gray-600 truncate">{resident.age}</td>
-                                <td className="px-4 text-[14px] text-gray-600 truncate">{resident.voter}</td>
-                                <td className="px-4 text-left">
-                                    <span className={`inline-flex items-center px-3 py-1 rounded-md text-[11px] font-bold ${resident.status === 'Active' ? 'text-[#166534] bg-[#F0FDF4]' :
-                                        resident.status === 'Deceased' ? 'text-[#991B1B] bg-[#FEF2F2]' :
-                                            'text-[#9A3412] bg-[#FFFBEB]'
-                                        }`}>
-                                        {resident.status}
-                                    </span>
-                                </td>
-                                <td className="px-4 text-center">
-                                    <button 
-                                        onClick={() => {
-                                            setSelectedResident(resident);
-                                            setIsProfileModalOpen(true);
-                                        }}
-                                        className="w-10 h-10 rounded-xl border border-gray-100 flex items-center justify-center text-gray-400 hover:text-blue-600 hover:border-blue-200 hover:bg-blue-50 transition-all mx-auto active:scale-95"
-                                    >
-                                        <Search size={18} />
-                                    </button>
-                                </td>
-                            </tr>
-                        ))}
-                        {Array.from({ length: emptyRows }).map((_, idx) => (
-                            <tr key={`empty-${idx}`} style={{ height: `${rowHeight}px` }}>
-                                <td colSpan={8}></td>
-                            </tr>
-                        ))}
+                        {isLoading && residents.length === 0 ? (
+                            Array.from({ length: itemsPerPage }).map((_, idx) => (
+                                <tr key={`skeleton-${idx}`} style={{ height: `${rowHeight}px` }}>
+                                    <td colSpan={8} className="px-8">
+                                        <div className="h-4 bg-gray-100 rounded animate-pulse w-3/4" />
+                                    </td>
+                                </tr>
+                            ))
+                        ) : (
+                            <>
+                                {residents.map((resident) => (
+                                    <tr key={resident.id} className="hover:bg-gray-50/50 transition-colors" style={{ height: `${rowHeight}px` }}>
+                                        <td className="pl-8 pr-4 text-[14px] text-gray-900 font-bold truncate">{String(resident.displayId ?? 0).padStart(3, '0')}</td>
+                                        <td className="px-4 text-[14px] text-gray-700 font-medium truncate">{resident.lastName}</td>
+                                        <td className="px-4 text-[14px] text-gray-700 font-medium truncate">{resident.firstName}</td>
+                                        <td className="px-4 text-[14px] text-gray-600 truncate">{resident.sex}</td>
+                                        <td className="px-4 text-[14px] text-gray-600 truncate">{resident.age}</td>
+                                        <td className="px-4 text-[14px] text-gray-600 truncate">{resident.voter}</td>
+                                        <td className="px-4 text-left">
+                                            <span className={`inline-flex items-center px-3 py-1 rounded-md text-[11px] font-bold ${resident.status === 'Active' ? 'text-[#166534] bg-[#F0FDF4]' :
+                                                resident.status === 'Deceased' ? 'text-[#991B1B] bg-[#FEF2F2]' :
+                                                    'text-[#9A3412] bg-[#FFFBEB]'
+                                                }`}>
+                                                {resident.status}
+                                            </span>
+                                        </td>
+                                        <td className="px-4 text-center">
+                                            <button 
+                                                onClick={() => {
+                                                    setSelectedResident(resident);
+                                                    setIsProfileModalOpen(true);
+                                                }}
+                                                className="w-10 h-10 rounded-xl border border-gray-100 flex items-center justify-center text-gray-400 hover:text-blue-600 hover:border-blue-200 hover:bg-blue-50 transition-all mx-auto active:scale-95"
+                                            >
+                                                <Search size={18} />
+                                            </button>
+                                        </td>
+                                    </tr>
+                                ))}
+                                {Array.from({ length: emptyRows }).map((_, idx) => (
+                                    <tr key={`empty-${idx}`} style={{ height: `${rowHeight}px` }}>
+                                        <td colSpan={8}></td>
+                                    </tr>
+                                ))}
+                            </>
+                        )}
                     </tbody>
                 </table>
             </div>
@@ -592,14 +590,20 @@ const Residents: React.FC<ResidentsProps> = ({ setIsNavigationBlocked, onShowSuc
                         setIsNavigationBlocked={setIsNavigationBlocked}
                         onShowSuccess={(msg) => {
                             if (onShowSuccess) onShowSuccess(msg);
-                            fetchResidents();
+                            queryClient.invalidateQueries({ queryKey: ['residents'] });
                         }}
                     />
                 )}            </ContentCard>
 
             <ResidentProfileModal 
                 isOpen={isProfileModalOpen}
-                onClose={() => setIsProfileModalOpen(false)}
+                onClose={() => {
+                    setIsProfileModalOpen(false);
+                    queryClient.invalidateQueries({ queryKey: ['residents'] });
+                    if (selectedResident) {
+                        queryClient.removeQueries({ queryKey: ['resident', selectedResident.id] });
+                    }
+                }}
                 resident={selectedResident}
                 onShowSuccess={onShowSuccess}
             />
@@ -611,9 +615,9 @@ const Residents: React.FC<ResidentsProps> = ({ setIsNavigationBlocked, onShowSuc
                     setIsBatchImportOpen(false);
                     setToastMessage(`${count} residents imported successfully!`);
                     setShowToast(true);
-                    fetchResidents();
+                    queryClient.invalidateQueries({ queryKey: ['residents'] });
                 }}
-                existingResidents={residents /* TODO: server-side duplicate check */}
+                existingResidents={residents}
             />
 
             <SuccessToast

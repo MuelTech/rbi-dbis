@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { X, User, Edit, Plus, FileText, CreditCard, Search, PawPrint, Car, Save, ChevronDown, Loader2 } from 'lucide-react';
+import { useQueryClient } from '@tanstack/react-query';
 import AddMemberForm from '@/components/forms/AddMemberForm';
 import ResidentProfileModal from '@/components/ui/ResidentProfileModal';
 import { Resident } from '@/types';
@@ -62,6 +63,7 @@ const EMPTY_FORM: FormState = {
 const RELATIONSHIP_OPTIONS = ['Spouse', 'Parent', 'Child', 'Sibling', 'Other'] as const;
 
 const FamilyViewModal: React.FC<FamilyViewModalProps> = ({ isOpen, onClose, familyId, familyName, onShowSuccess, familyStatus }) => {
+    const queryClient = useQueryClient();
     const [isEditing, setIsEditing] = useState(false);
     const [viewMode, setViewMode] = useState<'view' | 'add'>('view');
     const [openDropdown, setOpenDropdown] = useState<string | null>(null);
@@ -569,7 +571,13 @@ const FamilyViewModal: React.FC<FamilyViewModalProps> = ({ isOpen, onClose, fami
             
             <ResidentProfileModal
                 isOpen={showResidentProfile}
-                onClose={() => setShowResidentProfile(false)}
+                onClose={() => {
+                    setShowResidentProfile(false);
+                    if (selectedResident) {
+                        queryClient.removeQueries({ queryKey: ['resident', selectedResident.id] });
+                    }
+                    fetchFamily();
+                }}
                 resident={selectedResident}
                 onShowSuccess={onShowSuccess}
             />

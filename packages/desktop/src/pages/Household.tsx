@@ -1,9 +1,9 @@
-import React, { useState, useRef, useLayoutEffect, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useLayoutEffect, useEffect } from 'react';
 import { Search, ChevronLeft, ChevronRight, ChevronDown, PawPrint } from 'lucide-react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import ContentCard from '@/components/ui/ContentCard';
 import FamilyListModal from '@/components/ui/FamilyListModal';
 import { householdsService } from '@/services/households';
-import type { HouseholdRow } from '@/services/households';
 
 const BLOCKS = ['1', '2', '3'];
 
@@ -12,6 +12,7 @@ interface HouseholdProps {
 }
 
 const Household: React.FC<HouseholdProps> = ({ onShowSuccess }) => {
+    const queryClient = useQueryClient();
     const [currentPage, setCurrentPage] = useState(1);
     const [searchQuery, setSearchQuery] = useState('');
     const [debouncedSearch, setDebouncedSearch] = useState('');
@@ -24,11 +25,6 @@ const Household: React.FC<HouseholdProps> = ({ onShowSuccess }) => {
 
     const [itemsPerPage, setItemsPerPage] = useState(10);
     const [rowHeight, setRowHeight] = useState(72);
-
-    const [households, setHouseholds] = useState<HouseholdRow[]>([]);
-    const [totalHouseholds, setTotalHouseholds] = useState(0);
-    const [totalPages, setTotalPages] = useState(0);
-    const [isLoading, setIsLoading] = useState(false);
 
     const containerRef = useRef<HTMLDivElement>(null);
     const headerRef = useRef<HTMLTableSectionElement>(null);
@@ -66,30 +62,19 @@ const Household: React.FC<HouseholdProps> = ({ onShowSuccess }) => {
         setCurrentPage(1);
     }, [selectedBlock, debouncedSearch]);
 
-    const fetchHouseholds = useCallback(async () => {
-        setIsLoading(true);
-        try {
-            const result = await householdsService.list({
-                page: currentPage,
-                pageSize: itemsPerPage,
-                block: selectedBlock || undefined,
-                search: debouncedSearch || undefined,
-            });
-            setHouseholds(result.data);
-            setTotalHouseholds(result.meta.total);
-            setTotalPages(result.meta.totalPages);
-        } catch {
-            setHouseholds([]);
-            setTotalHouseholds(0);
-            setTotalPages(0);
-        } finally {
-            setIsLoading(false);
-        }
-    }, [currentPage, itemsPerPage, selectedBlock, debouncedSearch]);
+    const { data, isLoading } = useQuery({
+        queryKey: ['households', { page: currentPage, pageSize: itemsPerPage, block: selectedBlock, search: debouncedSearch }],
+        queryFn: () => householdsService.list({
+            page: currentPage,
+            pageSize: itemsPerPage,
+            block: selectedBlock || undefined,
+            search: debouncedSearch || undefined,
+        }),
+    });
 
-    useEffect(() => {
-        fetchHouseholds();
-    }, [fetchHouseholds]);
+    const households = data?.data ?? [];
+    const totalHouseholds = data?.meta.total ?? 0;
+    const totalPages = data?.meta.totalPages ?? 0;
 
     const indexOfFirstItem = (currentPage - 1) * itemsPerPage;
     const indexOfLastItem = indexOfFirstItem + households.length;
@@ -192,31 +177,43 @@ const Household: React.FC<HouseholdProps> = ({ onShowSuccess }) => {
                         </tr>
                     </thead>
                     <tbody className="bg-white">
-                        {households.map((item) => (
-                            <tr key={item.id} className="hover:bg-gray-50/50 transition-colors" style={{ height: `${rowHeight}px` }}>
-                                <td className="pl-8 pr-4 text-[14px] text-gray-900 font-bold truncate">{item.brgyHouseholdNo.padStart(3, '0')}</td>
-                                <td className="px-4 text-[14px] text-gray-700 font-medium truncate">{item.familyCount}</td>
-                                <td className="px-4 text-[14px] text-gray-700 font-medium truncate">{item.voterCount}</td>
-                                <td className="px-4 text-[14px] text-gray-700 font-medium truncate">{item.catCount}</td>
-                                <td className="px-4 text-[14px] text-gray-700 font-medium truncate">{item.dogCount}</td>
-                                <td className="px-4 text-center">
-                                    <button 
-                                        onClick={() => {
-                                            setSelectedHouseholdId(item.id);
-                                            setIsFamilyModalOpen(true);
-                                        }}
-                                        className="w-10 h-10 rounded-xl border border-gray-100 flex items-center justify-center text-gray-400 hover:text-blue-600 hover:border-blue-200 hover:bg-blue-50 transition-all mx-auto active:scale-95"
-                                    >
-                                        <Search size={18} />
-                                    </button>
-                                </td>
-                            </tr>
-                        ))}
-                        {Array.from({ length: emptyRows }).map((_, idx) => (
-                            <tr key={`empty-${idx}`} style={{ height: `${rowHeight}px` }}>
-                                <td colSpan={6}></td>
-                            </tr>
-                        ))}
+                        {isLoading && households.length === 0 ? (
+                            Array.from({ length: itemsPerPage }).map((_, idx) => (
+                                <tr key={`skeleton-${idx}`} style={{ height: `${rowHeight}px` }}>
+                                    <td colSpan={6} className="px-8">
+                                        <div className="h-4 bg-gray-100 rounded animate-pulse w-3/4" />
+                                    </td>
+                                </tr>
+                            ))
+                        ) : (
+                            <>
+                                {households.map((item) => (
+                                    <tr key={item.id} className="hover:bg-gray-50/50 transition-colors" style={{ height: `${rowHeight}px` }}>
+                                        <td className="pl-8 pr-4 text-[14px] text-gray-900 font-bold truncate">{item.brgyHouseholdNo.padStart(3, '0')}</td>
+                                        <td className="px-4 text-[14px] text-gray-700 font-medium truncate">{item.familyCount}</td>
+                                        <td className="px-4 text-[14px] text-gray-700 font-medium truncate">{item.voterCount}</td>
+                                        <td className="px-4 text-[14px] text-gray-700 font-medium truncate">{item.catCount}</td>
+                                        <td className="px-4 text-[14px] text-gray-700 font-medium truncate">{item.dogCount}</td>
+                                        <td className="px-4 text-center">
+                                            <button 
+                                                onClick={() => {
+                                                    setSelectedHouseholdId(item.id);
+                                                    setIsFamilyModalOpen(true);
+                                                }}
+                                                className="w-10 h-10 rounded-xl border border-gray-100 flex items-center justify-center text-gray-400 hover:text-blue-600 hover:border-blue-200 hover:bg-blue-50 transition-all mx-auto active:scale-95"
+                                            >
+                                                <Search size={18} />
+                                            </button>
+                                        </td>
+                                    </tr>
+                                ))}
+                                {Array.from({ length: emptyRows }).map((_, idx) => (
+                                    <tr key={`empty-${idx}`} style={{ height: `${rowHeight}px` }}>
+                                        <td colSpan={6}></td>
+                                    </tr>
+                                ))}
+                            </>
+                        )}
                     </tbody>
                 </table>
             </div>
@@ -269,7 +266,10 @@ const Household: React.FC<HouseholdProps> = ({ onShowSuccess }) => {
 
             <FamilyListModal 
                 isOpen={isFamilyModalOpen}
-                onClose={() => setIsFamilyModalOpen(false)}
+                onClose={() => {
+                    setIsFamilyModalOpen(false);
+                    queryClient.invalidateQueries({ queryKey: ['households'] });
+                }}
                 householdId={selectedHouseholdId}
                 onShowSuccess={onShowSuccess}
             />

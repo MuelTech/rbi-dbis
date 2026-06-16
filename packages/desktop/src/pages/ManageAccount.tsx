@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Shield, Upload, User, Lock, Phone, Save, CheckCircle, XCircle, Edit } from 'lucide-react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import ContentCard from '@/components/ui/ContentCard';
 import { usersService } from '@/services';
 import { User as UserType } from '@/types';
@@ -21,7 +22,7 @@ interface ManageAccountProps {
 }
 
 const ManageAccount: React.FC<ManageAccountProps> = ({ onShowSuccess, setIsNavigationBlocked }) => {
-    const [users, setUsers] = useState<UserType[]>([]);
+    const queryClient = useQueryClient();
     const [isEditing, setIsEditing] = useState(false);
     const [editingId, setEditingId] = useState<string | null>(null);
     const formRef = useRef<HTMLDivElement>(null);
@@ -32,22 +33,31 @@ const ManageAccount: React.FC<ManageAccountProps> = ({ onShowSuccess, setIsNavig
 
     const [errors, setErrors] = useState<Record<string, string>>({});
 
-    useEffect(() => {
-        usersService.getAll().then((data: any[]) => {
-            setUsers(data.map((u: any) => ({
-                id: u.id,
-                displayId: u.displayId,
-                firstName: u.userInfo?.firstName ?? '',
-                lastName: u.userInfo?.lastName ?? '',
-                username: u.username,
-                phoneNumber: u.userInfo?.phoneNumber ?? '',
-                role: u.roleType as UserType['role'],
-                permission: (u.permission ?? 'Full Access') as UserType['permission'],
-                lastLogin: u.lastLogin ? new Date(u.lastLogin).toLocaleString() : 'Never',
-                status: u.isActive ? 'Active' : 'Disabled' as UserType['status'],
-            })));
-        }).catch(() => {});
-    }, []);
+    const { data: rawUsers, isLoading } = useQuery({
+        queryKey: ['users'],
+        queryFn: () => usersService.getAll(),
+    });
+
+    const users: UserType[] = (rawUsers as any[] ?? []).map((u: any) => ({
+        id: u.id,
+        displayId: u.displayId,
+        firstName: u.userInfo?.firstName ?? '',
+        lastName: u.userInfo?.lastName ?? '',
+        username: u.username,
+        phoneNumber: u.userInfo?.phoneNumber ?? '',
+        role: u.roleType as UserType['role'],
+        permission: (u.permission ?? 'Full Access') as UserType['permission'],
+        lastLogin: u.lastLogin ? new Date(u.lastLogin).toLocaleString() : 'Never',
+        status: u.isActive ? 'Active' : 'Disabled' as UserType['status'],
+    }));
+
+    const saveMutation = useMutation({
+        mutationFn: ({ id, payload }: { id?: string; payload: any }) =>
+            id ? usersService.update(id, payload) : usersService.create(payload),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['users'] });
+        },
+    });
 
     useEffect(() => {
         if (setIsNavigationBlocked) {
@@ -62,7 +72,6 @@ const ManageAccount: React.FC<ManageAccountProps> = ({ onShowSuccess, setIsNavig
             ...prev,
             [name]: value
         }));
-        // Clear error when user types
         if (errors[name]) {
             setErrors(prev => {
                 const newErrors = { ...prev };
@@ -84,7 +93,7 @@ const ManageAccount: React.FC<ManageAccountProps> = ({ onShowSuccess, setIsNavig
     const handleEdit = (user: UserType) => {
         setIsEditing(true);
         setEditingId(user.id);
-        setErrors({}); // Clear errors when editing
+        setErrors({});
         const editData = {
             firstName: user.firstName,
             lastName: user.lastName,
@@ -98,7 +107,6 @@ const ManageAccount: React.FC<ManageAccountProps> = ({ onShowSuccess, setIsNavig
         setFormData(editData);
         setPristineData(editData);
         
-        // Scroll to top
         if (formRef.current) {
             formRef.current.scrollIntoView({ behavior: 'smooth' });
         }
@@ -111,7 +119,6 @@ const ManageAccount: React.FC<ManageAccountProps> = ({ onShowSuccess, setIsNavig
         if (!formData.username.trim()) newErrors.username = 'Username is required';
         if (!formData.phoneNumber.trim()) newErrors.phoneNumber = 'Phone number is required';
         
-        // Password validation: required for new users, optional for editing
         if (!isEditing && !formData.password) {
             newErrors.password = 'Password is required';
         }
@@ -123,52 +130,24 @@ const ManageAccount: React.FC<ManageAccountProps> = ({ onShowSuccess, setIsNavig
     const handleSave = async () => {
         if (!validateForm()) return;
 
+        const payload: any = {
+            username: formData.username,
+            roleType: formData.role,
+            permission: formData.permission,
+            isActive: formData.status,
+            firstName: formData.firstName,
+            lastName: formData.lastName,
+            phoneNumber: formData.phoneNumber,
+        };
+        if (formData.password) payload.password = formData.password;
+
         try {
-            const payload: any = {
-                username: formData.username,
-                roleType: formData.role,
-                permission: formData.permission,
-                isActive: formData.status,
-                firstName: formData.firstName,
-                lastName: formData.lastName,
-                phoneNumber: formData.phoneNumber,
-            };
-            if (formData.password) payload.password = formData.password;
-
-            if (isEditing && editingId) {
-                const updated: any = await usersService.update(editingId, payload);
-                setUsers(prev => prev.map(u => u.id === editingId ? {
-                    ...u,
-                    firstName: updated.userInfo?.firstName ?? formData.firstName,
-                    lastName: updated.userInfo?.lastName ?? formData.lastName,
-                    username: updated.username,
-                    phoneNumber: updated.userInfo?.phoneNumber ?? formData.phoneNumber,
-                    role: updated.roleType as UserType['role'],
-                    permission: (updated.permission ?? u.permission) as UserType['permission'],
-                    status: updated.isActive ? 'Active' : 'Disabled' as UserType['status'],
-                } : u));
-                setIsEditing(false);
-                setEditingId(null);
-                if (onShowSuccess) onShowSuccess('Account updated successfully');
-            } else {
-                const created: any = await usersService.create(payload);
-                setUsers(prev => [{
-                    id: created.id,
-                    displayId: created.displayId,
-                    firstName: created.userInfo?.firstName ?? formData.firstName,
-                    lastName: created.userInfo?.lastName ?? formData.lastName,
-                    username: created.username,
-                    phoneNumber: created.userInfo?.phoneNumber ?? formData.phoneNumber,
-                    role: (created.roleType ?? formData.role) as UserType['role'],
-                    permission: (created.permission ?? formData.permission) as UserType['permission'],
-                    status: created.isActive ? 'Active' : 'Disabled' as UserType['status'],
-                    lastLogin: 'Never',
-                }, ...prev]);
-                if (onShowSuccess) onShowSuccess('Account created successfully');
-            }
-
+            await saveMutation.mutateAsync({ id: editingId ?? undefined, payload });
+            setIsEditing(false);
+            setEditingId(null);
             setFormData(initialFormState);
             setPristineData(initialFormState);
+            if (onShowSuccess) onShowSuccess(isEditing ? 'Account updated successfully' : 'Account created successfully');
         } catch (err: any) {
             setErrors({ username: err.message ?? 'Save failed' });
         }
@@ -389,10 +368,11 @@ const ManageAccount: React.FC<ManageAccountProps> = ({ onShowSuccess, setIsNavig
                                 )}
                                 <button 
                                     onClick={handleSave}
-                                    className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded-xl text-sm font-bold flex items-center gap-2 transition-colors shadow-lg shadow-blue-600/20"
+                                    disabled={saveMutation.isPending}
+                                    className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded-xl text-sm font-bold flex items-center gap-2 transition-colors shadow-lg shadow-blue-600/20 disabled:opacity-50"
                                 >
                                     <Save size={18} />
-                                    {isEditing ? 'Update Account' : 'Save Account'}
+                                    {saveMutation.isPending ? 'Saving...' : isEditing ? 'Update Account' : 'Save Account'}
                                 </button>
                             </div>
                         </div>
@@ -415,39 +395,49 @@ const ManageAccount: React.FC<ManageAccountProps> = ({ onShowSuccess, setIsNavig
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-50 bg-white">
-                                    {users.map((user) => (
-                                        <tr key={user.id} className="hover:bg-gray-50/50 transition-colors">
-                                            <td className="py-4 pl-8 pr-4 text-sm font-medium text-gray-900">{String(user.displayId ?? 0).padStart(4, '0')}</td>
-                                            <td className="py-4 px-4 text-sm font-bold text-gray-800">{user.username}</td>
-                                            <td className="py-4 px-4">
-                                                <span className={`inline-flex px-2.5 py-1 rounded-lg text-[11px] font-bold ${
-                                                    user.role === 'SuperAdmin' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'
-                                                }`}>
-                                                    {user.role}
-                                                </span>
-                                            </td>
-                                            <td className="py-4 px-4 text-sm text-gray-600">{user.permission}</td>
-                                            <td className="py-4 px-4 text-sm text-gray-500">{user.lastLogin}</td>
-                                            <td className="py-4 px-4">
-                                                <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold border ${
-                                                    user.status === 'Active'
-                                                        ? 'bg-green-50 text-green-600 border-green-200'
-                                                        : 'bg-gray-50 text-gray-500 border-gray-200'
-                                                }`}>
-                                                    {user.status === 'Active' ? <CheckCircle size={12} /> : <XCircle size={12} />}
-                                                    {user.status}
-                                                </span>
-                                            </td>
-                                            <td className="py-4 px-4 text-center">
-                                                <button 
-                                                    onClick={() => handleEdit(user)}
-                                                    className="w-8 h-8 rounded-lg border border-gray-100 flex items-center justify-center text-gray-400 hover:text-blue-600 hover:border-blue-200 hover:bg-blue-50 transition-all mx-auto"
-                                                >
-                                                    <Edit size={14} />
-                                                </button>
-                                            </td>
-                                        </tr>
-                                    ))}
+                                    {isLoading ? (
+                                        Array.from({ length: 5 }).map((_, idx) => (
+                                            <tr key={`skeleton-${idx}`}>
+                                                <td colSpan={7} className="py-4 px-8">
+                                                    <div className="h-4 bg-gray-100 rounded animate-pulse w-3/4" />
+                                                </td>
+                                            </tr>
+                                        ))
+                                    ) : (
+                                        users.map((user) => (
+                                            <tr key={user.id} className="hover:bg-gray-50/50 transition-colors">
+                                                <td className="py-4 pl-8 pr-4 text-sm font-medium text-gray-900">{String(user.displayId ?? 0).padStart(4, '0')}</td>
+                                                <td className="py-4 px-4 text-sm font-bold text-gray-800">{user.username}</td>
+                                                <td className="py-4 px-4">
+                                                    <span className={`inline-flex px-2.5 py-1 rounded-lg text-[11px] font-bold ${
+                                                        user.role === 'SuperAdmin' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'
+                                                    }`}>
+                                                        {user.role}
+                                                    </span>
+                                                </td>
+                                                <td className="py-4 px-4 text-sm text-gray-600">{user.permission}</td>
+                                                <td className="py-4 px-4 text-sm text-gray-500">{user.lastLogin}</td>
+                                                <td className="py-4 px-4">
+                                                    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold border ${
+                                                        user.status === 'Active'
+                                                            ? 'bg-green-50 text-green-600 border-green-200'
+                                                            : 'bg-gray-50 text-gray-500 border-gray-200'
+                                                    }`}>
+                                                        {user.status === 'Active' ? <CheckCircle size={12} /> : <XCircle size={12} />}
+                                                        {user.status}
+                                                    </span>
+                                                </td>
+                                                <td className="py-4 px-4 text-center">
+                                                    <button 
+                                                        onClick={() => handleEdit(user)}
+                                                        className="w-8 h-8 rounded-lg border border-gray-100 flex items-center justify-center text-gray-400 hover:text-blue-600 hover:border-blue-200 hover:bg-blue-50 transition-all mx-auto"
+                                                    >
+                                                        <Edit size={14} />
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        ))
+                                    )}
                                 </tbody>
                             </table>
                         </div>

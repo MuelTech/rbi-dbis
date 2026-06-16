@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Lock, Save, ChevronDown, Edit, FileText, Activity, User as UserIcon, Loader2 } from 'lucide-react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Modal from '@/components/ui/Modal';
 import { Resident, ResidentDetail } from '@/types';
 import { useAuth } from '@/context/AuthContext';
@@ -114,39 +115,49 @@ function buildFormData(detail: ResidentDetail) {
 
 const ResidentProfileModal: React.FC<ResidentProfileModalProps> = ({ isOpen, onClose, resident, onShowSuccess }) => {
     const { user } = useAuth();
+    const queryClient = useQueryClient();
     const [activeTab, setActiveTab] = useState('profile');
     const [isEditing, setIsEditing] = useState(false);
     const [formData, setFormData] = useState<ReturnType<typeof buildFormData> | null>(null);
     const [isStatusDropdownOpen, setIsStatusDropdownOpen] = useState(false);
 
-    const [detail, setDetail] = useState<ResidentDetail | null>(null);
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState<string | null>(null);
-    const [saving, setSaving] = useState(false);
+    const { data: detail, isLoading: loading, error: queryError } = useQuery({
+        queryKey: ['resident', resident?.id],
+        queryFn: () => residentsService.getById(resident!.id),
+        enabled: isOpen && !!resident,
+    });
 
-    const fetchDetail = useCallback(async (id: string) => {
-        setLoading(true);
-        setError(null);
-        try {
-            const data = await residentsService.getById(id);
-            setDetail(data);
-            setFormData(buildFormData(data));
-        } catch (err: any) {
-            setError(err?.message ?? 'Failed to load resident details');
-        } finally {
-            setLoading(false);
+    const error = queryError ? (queryError as Error).message ?? 'Failed to load resident details' : null;
+
+    // Sync formData when detail loads or after save
+    useEffect(() => {
+        if (detail && !isEditing) {
+            setFormData(buildFormData(detail));
         }
-    }, []);
+    }, [detail, isEditing]);
 
+    // Reset state when modal opens
     useEffect(() => {
         if (isOpen && resident) {
             setActiveTab('profile');
             setIsEditing(false);
-            setDetail(null);
             setFormData(null);
-            fetchDetail(resident.id);
         }
-    }, [isOpen, resident, fetchDetail]);
+    }, [isOpen, resident]);
+
+    const updateMutation = useMutation({
+        mutationFn: ({ id, payload }: { id: string; payload: Record<string, unknown> }) =>
+            residentsService.update(id, payload),
+        onSuccess: (updated) => {
+            queryClient.setQueryData(['resident', resident?.id], updated);
+            setFormData(buildFormData(updated));
+            setIsEditing(false);
+            onShowSuccess?.("Update profile success.");
+        },
+        onError: (err: any) => {
+            // Error handled via mutation state
+        },
+    });
 
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
         const { name, value, type } = e.target;
@@ -158,36 +169,25 @@ const ResidentProfileModal: React.FC<ResidentProfileModalProps> = ({ isOpen, onC
 
     const handleSave = async () => {
         if (!formData || !detail) return;
-        setSaving(true);
-        try {
-            const payload: Record<string, unknown> = {
-                firstName: formData.firstName,
-                lastName: formData.lastName,
-                middleName: formData.middleName,
-                suffix: formData.suffix || null,
-                dateOfBirth: formData.dateOfBirth || null,
-                placeOfBirth: formData.placeOfBirth || null,
-                civilStatus: formData.civilStatus || null,
-                sex: formData.sex,
-                contactNumber: formData.contactNumber || null,
-                occupation: formData.occupation || null,
-                studentType: formData.studentStatus || null,
-                isVoter: formData.voter,
-                isPwd: formData.pwd,
-                isSoloParent: formData.soloParent,
-                isOwner: formData.homeowner,
-                status: formData.status,
-            };
-            const updated = await residentsService.update(detail.id, payload);
-            setDetail(updated);
-            setFormData(buildFormData(updated));
-            setIsEditing(false);
-            onShowSuccess?.("Update profile success.");
-        } catch (err: any) {
-            setError(err?.message ?? 'Failed to save changes');
-        } finally {
-            setSaving(false);
-        }
+        const payload: Record<string, unknown> = {
+            firstName: formData.firstName,
+            lastName: formData.lastName,
+            middleName: formData.middleName,
+            suffix: formData.suffix || null,
+            dateOfBirth: formData.dateOfBirth || null,
+            placeOfBirth: formData.placeOfBirth || null,
+            civilStatus: formData.civilStatus || null,
+            sex: formData.sex,
+            contactNumber: formData.contactNumber || null,
+            occupation: formData.occupation || null,
+            studentType: formData.studentStatus || null,
+            isVoter: formData.voter,
+            isPwd: formData.pwd,
+            isSoloParent: formData.soloParent,
+            isOwner: formData.homeowner,
+            status: formData.status,
+        };
+        updateMutation.mutate({ id: detail.id, payload });
     };
 
     const handleCancelEdit = () => {
@@ -211,7 +211,7 @@ const ResidentProfileModal: React.FC<ResidentProfileModalProps> = ({ isOpen, onC
                 <div className="flex-1 flex flex-col items-center justify-center py-20 gap-3">
                     <div className="text-red-500 text-sm font-medium">{error}</div>
                     <button
-                        onClick={() => fetchDetail(resident.id)}
+                        onClick={() => queryClient.invalidateQueries({ queryKey: ['resident', resident?.id] })}
                         className="px-4 py-2 bg-blue-600 text-white rounded-xl text-[13px] font-bold hover:bg-blue-700 transition-colors"
                     >
                         Retry
@@ -694,18 +694,18 @@ const ResidentProfileModal: React.FC<ResidentProfileModalProps> = ({ isOpen, onC
                                 <>
                                     <button 
                                         onClick={handleCancelEdit}
-                                        disabled={saving}
+                                        disabled={updateMutation.isPending}
                                         className="px-5 py-2.5 bg-white border border-gray-200 text-gray-700 rounded-xl text-[13px] font-bold hover:bg-gray-50 transition-colors disabled:opacity-50"
                                     >
                                         Cancel
                                     </button>
                                     <button 
                                         onClick={handleSave}
-                                        disabled={saving}
+                                        disabled={updateMutation.isPending}
                                         className="px-5 py-2.5 bg-blue-600 text-white rounded-xl text-[13px] font-bold hover:bg-blue-700 transition-colors shadow-lg shadow-blue-200 flex items-center gap-2 disabled:opacity-50"
                                     >
-                                        {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
-                                        {saving ? 'Saving...' : 'Save Changes'}
+                                        {updateMutation.isPending ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+                                        {updateMutation.isPending ? 'Saving...' : 'Save Changes'}
                                     </button>
                                 </>
                             ) : (

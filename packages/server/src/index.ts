@@ -11,6 +11,7 @@ import { activityLogRouter } from "./routes/activityLogs.js";
 import { registrationRouter } from "./routes/registrations.js";
 import { familyRouter } from "./routes/families.js";
 import { dashboardRouter } from "./routes/dashboard.js";
+import { archivedRouter } from "./routes/archived.js";
 import { errorHandler } from "./middleware/errorHandler.js";
 
 const app = express();
@@ -33,6 +34,7 @@ app.use("/api/users", requireAuth, userRouter);
 app.use("/api/activity-logs", requireAuth, activityLogRouter);
 app.use("/api/resident-registrations", requireAuth, registrationRouter);
 app.use("/api/families", requireAuth, familyRouter);
+app.use("/api/archived-families", requireAuth, archivedRouter);
 app.use("/api/dashboard", requireAuth, dashboardRouter);
 
 app.use(errorHandler);
