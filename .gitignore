@@ -27,6 +27,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
-.cursor/
+.agent/
 # Electron build output
 out/

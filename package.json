@@ -1,9 +1,6 @@
 {
   "name": "rbi-dbis",
   "private": true,
-  "pnpm": {
-    "onlyBuiltDependencies": ["esbuild", "@prisma/client", "@prisma/engines", "prisma", "electron", "electron-winstaller"]
-  },
   "scripts": {
     "dev:server": "pnpm --filter @rbi/server dev",
     "dev:desktop": "pnpm --filter @rbi/desktop dev",
