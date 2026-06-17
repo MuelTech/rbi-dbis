@@ -78,6 +78,7 @@ const Archived: React.FC = () => {
         mutationFn: (familyId: string) => archivedService.restore(familyId),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['archived-families'] });
+            queryClient.invalidateQueries({ queryKey: ['demographics'] });
             setToastMessage('Family restored successfully');
             setShowToast(true);
         },

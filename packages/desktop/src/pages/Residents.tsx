@@ -591,6 +591,7 @@ const Residents: React.FC<ResidentsProps> = ({ setIsNavigationBlocked, onShowSuc
                         onShowSuccess={(msg) => {
                             if (onShowSuccess) onShowSuccess(msg);
                             queryClient.invalidateQueries({ queryKey: ['residents'] });
+                            queryClient.invalidateQueries({ queryKey: ['demographics'] });
                         }}
                     />
                 )}            </ContentCard>
@@ -600,6 +601,7 @@ const Residents: React.FC<ResidentsProps> = ({ setIsNavigationBlocked, onShowSuc
                 onClose={() => {
                     setIsProfileModalOpen(false);
                     queryClient.invalidateQueries({ queryKey: ['residents'] });
+                    queryClient.invalidateQueries({ queryKey: ['demographics'] });
                     if (selectedResident) {
                         queryClient.removeQueries({ queryKey: ['resident', selectedResident.id] });
                     }
@@ -616,6 +618,7 @@ const Residents: React.FC<ResidentsProps> = ({ setIsNavigationBlocked, onShowSuc
                     setToastMessage(`${count} residents imported successfully!`);
                     setShowToast(true);
                     queryClient.invalidateQueries({ queryKey: ['residents'] });
+                    queryClient.invalidateQueries({ queryKey: ['demographics'] });
                 }}
                 existingResidents={residents}
             />
