@@ -91,7 +91,6 @@ export async function backupData(
         prisma.household.findMany(),
         prisma.block.findMany(),
         prisma.user.findMany({
-          omit: { password: true },
           include: { userInfo: true },
         }),
         prisma.document.findMany({
@@ -260,13 +259,13 @@ export async function restoreData(
 
       // Restore users
       if (data.users?.length) {
-        const hashedPassword = await bcrypt.hash("changeme123", 10);
+        const defaultPassword = await bcrypt.hash("changeme123", 10);
         for (const user of data.users) {
           await tx.user.create({
             data: {
               id: user.id,
               username: user.username,
-              password: hashedPassword,
+              password: user.password || defaultPassword,
               roleType: user.roleType,
               isActive: user.isActive,
               permission: user.permission,
