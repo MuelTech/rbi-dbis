@@ -1,4 +1,5 @@
 import type { Request, Response, NextFunction } from "express";
+import bcrypt from "bcryptjs";
 import { prisma, Prisma } from "@rbi/db";
 
 const DEFAULT_SETTINGS = {
@@ -259,12 +260,13 @@ export async function restoreData(
 
       // Restore users
       if (data.users?.length) {
+        const hashedPassword = await bcrypt.hash("changeme123", 10);
         for (const user of data.users) {
           await tx.user.create({
             data: {
               id: user.id,
               username: user.username,
-              password: "changeme123",
+              password: hashedPassword,
               roleType: user.roleType,
               isActive: user.isActive,
               permission: user.permission,
