@@ -8,3 +8,5 @@ export { usersService } from "./users";
 export { activityLogsService } from "./activityLogs";
 export { dashboardService } from "./dashboard";
 export type { ResidentDemographics } from "./dashboard";
+export { settingsService } from "./settings";
+export type { BarangaySettings } from "./settings";
