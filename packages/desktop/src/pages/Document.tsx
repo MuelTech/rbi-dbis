@@ -4,8 +4,10 @@ import ContentCard from '@/components/ui/ContentCard';
 import CustomDropdown from '@/components/ui/CustomDropdown';
 import { getDocumentConfig } from '@/config/documents';
 import { DocumentConfig } from '@/types';
+import { useSettings } from '@/hooks/useSettings';
 
 const Document: React.FC = () => {
+  const { settings } = useSettings();
   const [step, setStep] = useState(1);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedResident, setSelectedResident] = useState('');
@@ -99,7 +101,11 @@ const Document: React.FC = () => {
       const initialData: Record<string, any> = {
         selectedResident: residentObj ? getFullName(residentObj) : (selectedResident || searchQuery),
         purpose: purpose === 'Other' ? otherPurpose : purpose,
-        dateIssued: new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+        dateIssued: new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }),
+        barangayName: settings.barangayName,
+        municipality: settings.municipality,
+        province: settings.province,
+        punongBarangay: settings.punongBarangay,
       };
 
       config.fields.forEach(field => {

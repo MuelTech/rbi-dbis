@@ -2,10 +2,12 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
+import { useSettings } from '@/hooks/useSettings';
 
 const Login: React.FC = () => {
   const navigate = useNavigate();
   const { login } = useAuth();
+  const { settings } = useSettings();
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [formData, setFormData] = useState({
@@ -36,7 +38,7 @@ const Login: React.FC = () => {
         />
         <div className="absolute inset-0 bg-black/20" /> {/* Overlay */}
         <div className="relative z-10 text-white text-4xl font-bold tracking-wider drop-shadow-lg">
-          Barangay 418
+          {settings.barangayName}
         </div>
       </div>
 

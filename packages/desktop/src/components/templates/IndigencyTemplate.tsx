@@ -7,7 +7,9 @@ const IndigencyTemplate: React.FC<{ data: any }> = ({ data }) => {
     purpose,
     dateIssued,
     civilStatus,
-    amountPaid
+    amountPaid,
+    barangayName,
+    punongBarangay,
   } = data;
 
   return (
@@ -16,7 +18,7 @@ const IndigencyTemplate: React.FC<{ data: any }> = ({ data }) => {
       <div className="text-center mb-12">
         <p className="text-[10pt] tracking-widest uppercase text-gray-500 mb-1">Republic of the Philippines</p>
         <p className="text-[10pt] tracking-widest uppercase text-gray-500 mb-2">City of Manila</p>
-        <h1 className="text-[16pt] font-bold text-blue-900 uppercase mb-1">Barangay 418</h1>
+        <h1 className="text-[16pt] font-bold text-blue-900 uppercase mb-1">{barangayName}</h1>
         <p className="text-[9pt] font-bold tracking-widest uppercase text-gray-600">Office of the Barangay Captain</p>
       </div>
 
@@ -33,7 +35,7 @@ const IndigencyTemplate: React.FC<{ data: any }> = ({ data }) => {
       {/* Body */}
       <div className="mb-8">
         <p className="text-[12pt] font-serif leading-relaxed indent-12 mb-6">
-          This is to certify that <span className="font-bold uppercase">{selectedResident}</span>, of legal age, <span className="font-bold lowercase">{civilStatus || 'single'}</span>, Filipino, is a resident of <span className="font-bold">{address}</span>, Barangay 418, Sampaloc, Manila.
+          This is to certify that <span className="font-bold uppercase">{selectedResident}</span>, of legal age, <span className="font-bold lowercase">{civilStatus || 'single'}</span>, Filipino, is a resident of <span className="font-bold">{address}</span>, {barangayName}, Sampaloc, Manila.
         </p>
         
         <p className="text-[12pt] font-serif leading-relaxed indent-12 mb-6">
@@ -45,14 +47,14 @@ const IndigencyTemplate: React.FC<{ data: any }> = ({ data }) => {
         </p>
 
         <p className="text-[12pt] font-serif leading-relaxed indent-12">
-          Issued this <span className="font-bold">{dateIssued}</span> at Barangay 418, Sampaloc, Manila.
+          Issued this <span className="font-bold">{dateIssued}</span> at {barangayName}, Sampaloc, Manila.
         </p>
       </div>
 
       {/* Signatories */}
       <div className="mt-24 flex justify-end">
         <div className="text-center w-[250px]">
-          <p className="text-[12pt] font-serif font-bold uppercase border-b border-black pb-1">Hon. Juan Dela Cruz</p>
+          <p className="text-[12pt] font-serif font-bold uppercase border-b border-black pb-1">Hon. {punongBarangay}</p>
           <p className="text-[10pt] font-serif font-bold mt-1">Barangay Captain</p>
         </div>
       </div>
