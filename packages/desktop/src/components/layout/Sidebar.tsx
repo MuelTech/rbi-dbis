@@ -12,9 +12,11 @@ import {
 } from 'lucide-react';
 import { SidebarProps } from '@/types';
 import { useAuth } from '@/context/AuthContext';
+import { useSettings } from '@/hooks/useSettings';
 
 const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab }) => {
   const { user, logout } = useAuth();
+  const { settings } = useSettings();
 
   const allMenuItems = [
     { label: 'Dashboard', icon: LayoutDashboard },
@@ -77,7 +79,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab }) => {
       {/* Logo Area */}
       <div className="p-6 xl:p-8 mb-2">
         <h1 className="text-2xl xl:text-3xl font-bold text-blue-600 whitespace-nowrap">
-          Barangay <span className="text-gray-800">418</span>
+          {settings.barangayName}
         </h1>
       </div>
 
