@@ -27,6 +27,7 @@ const App: React.FC = () => {
   // Redirect to login if not authenticated
   useEffect(() => {
     if (!user && location.pathname !== '/login') {
+      setSuccessToast({ show: false, message: '' });
       navigate('/login');
     }
   }, [user, location.pathname, navigate]);
