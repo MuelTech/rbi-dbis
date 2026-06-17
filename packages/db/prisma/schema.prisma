@@ -312,6 +312,17 @@ model AuditTrail {
   @@map("audit_trails")
 }
 
+// ─── BarangaySetting ──────────────────────────────────────────────────────
+
+model BarangaySetting {
+  id        String   @id @default(cuid())
+  data      Json
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("barangay_settings")
+}
+
 // ─── Enums ───────────────────────────────────────────────────────────────────
 
 enum Sex {
