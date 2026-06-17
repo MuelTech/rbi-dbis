@@ -1,72 +1,55 @@
 import React, { useState, useEffect } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import ContentCard from '@/components/ui/ContentCard';
-import { Image, MapPin, Users, Save, Upload, Settings as SettingsIcon, FileText, List, Plus, X, Database, Download, UploadCloud, History, FileUp } from 'lucide-react';
+import { Image, MapPin, Users, Save, Upload, Settings as SettingsIcon, FileText, List, Plus, X, Database, Download, UploadCloud, History, FileUp, Loader2 } from 'lucide-react';
+import { settingsService, BarangaySettings } from '@/services/settings';
 
 interface SettingsProps {
     onShowSuccess?: (message: string) => void;
     setIsNavigationBlocked?: (blocked: boolean) => void;
 }
 
-const initialSettings = {
-    slogan: 'Serbisyong Tapat, Para sa Lahat',
-    barangayName: 'Barangay 418',
-    municipality: 'Manila City',
-    province: 'Metro Manila',
-    telephone: '8921-1234',
-    punongBarangay: 'Juan Dela Cruz',
-    councilor1: 'Pedro Penduko',
-    councilor2: 'Maria Makiling',
-    councilor3: 'Jose Rizal',
-    councilor4: 'Andres Bonifacio',
-    councilor5: 'Emilio Aguinaldo',
-    councilor6: 'Gabriela Silang',
-    councilor7: 'Melchora Aquino',
-    skChairman: 'Kabataan Pagasa',
-    treasurer: 'Yaman Bayan',
-    secretary: 'Sulat Kamay',
-    clearanceFee: '200',
-    residencyFee: '150',
-    businessFee: '500',
-    ownershipFee: '300',
-};
-
-const initialPurposes = [
-    'Employment application',
-    'School enrollment',
-    'Legal documents',
-    'Job application',
-    'Scholarship application',
-    'Housing program applications',
-    'Business permit requirements'
-];
-
 const Settings: React.FC<SettingsProps> = ({ onShowSuccess, setIsNavigationBlocked }) => {
     const [activeTab, setActiveTab] = useState('General Information');
-    
-    // Form State
-    const [formData, setFormData] = useState(initialSettings);
-    const [pristineData, setPristineData] = useState(initialSettings);
-    
-    const [purposes, setPurposes] = useState(initialPurposes);
-    const [pristinePurposes, setPristinePurposes] = useState(initialPurposes);
-    
+    const queryClient = useQueryClient();
+
+    const { data: settings, isLoading } = useQuery({
+        queryKey: ['settings'],
+        queryFn: () => settingsService.get(),
+    });
+
+    const [formData, setFormData] = useState<BarangaySettings | null>(null);
+    const [purposes, setPurposes] = useState<string[]>([]);
+
+    useEffect(() => {
+        if (settings) {
+            setFormData(settings);
+            setPurposes(settings.purposes);
+        }
+    }, [settings]);
+
     const [newPurpose, setNewPurpose] = useState('');
 
-    // Navigation Blocking Logic
+    const saveMutation = useMutation({
+        mutationFn: (data: BarangaySettings) => settingsService.update(data),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['settings'] });
+            if (onShowSuccess) onShowSuccess('Settings saved successfully');
+            if (setIsNavigationBlocked) setIsNavigationBlocked(false);
+        },
+    });
+
+    const isDirty = JSON.stringify(formData) !== JSON.stringify(settings) || JSON.stringify(purposes) !== JSON.stringify(settings?.purposes);
+
     useEffect(() => {
         if (setIsNavigationBlocked) {
-            const isFormDirty = JSON.stringify(formData) !== JSON.stringify(pristineData);
-            const isPurposesDirty = JSON.stringify(purposes) !== JSON.stringify(pristinePurposes);
-            setIsNavigationBlocked(isFormDirty || isPurposesDirty);
+            setIsNavigationBlocked(isDirty);
         }
-    }, [formData, pristineData, purposes, pristinePurposes, setIsNavigationBlocked]);
+    }, [isDirty, setIsNavigationBlocked]);
 
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
         const { name, value } = e.target;
-        setFormData(prev => ({
-            ...prev,
-            [name]: value
-        }));
+        setFormData(prev => prev ? { ...prev, [name]: value } : null);
     };
 
     const handleAddPurpose = () => {
@@ -80,15 +63,10 @@ const Settings: React.FC<SettingsProps> = ({ onShowSuccess, setIsNavigationBlock
         setPurposes(purposes.filter((_, i) => i !== index));
     };
 
-    const handleSave = () => {
-        setPristineData(formData);
-        setPristinePurposes(purposes);
-        if (onShowSuccess) {
-            onShowSuccess('Settings saved successfully');
-        }
-        if (setIsNavigationBlocked) {
-            setIsNavigationBlocked(false);
-        }
+    const handleSave = async () => {
+        if (!formData) return;
+        const payload = { ...formData, purposes };
+        await saveMutation.mutateAsync(payload);
     };
 
     const tabs = [
@@ -96,6 +74,16 @@ const Settings: React.FC<SettingsProps> = ({ onShowSuccess, setIsNavigationBlock
         { name: 'Document Settings', id: 'document' },
         { name: 'Backup & Restore', id: 'backup' },
     ];
+
+    if (isLoading) {
+        return (
+            <div className="h-full">
+                <ContentCard className="flex flex-col h-full items-center justify-center">
+                    <Loader2 size={32} className="animate-spin text-blue-500" />
+                </ContentCard>
+            </div>
+        );
+    }
 
     return (
         <div className="h-full">
@@ -155,7 +143,7 @@ const Settings: React.FC<SettingsProps> = ({ onShowSuccess, setIsNavigationBlock
                                         <label className="block text-xs font-semibold text-gray-500 mb-2">Barangay Slogan</label>
                                         <textarea 
                                             name="slogan"
-                                            value={formData.slogan}
+                                            value={formData?.slogan ?? ''}
                                             onChange={handleInputChange}
                                             className="w-full h-32 p-4 bg-white border border-gray-200 rounded-xl text-sm text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none resize-none transition-all"
                                         />
@@ -176,7 +164,7 @@ const Settings: React.FC<SettingsProps> = ({ onShowSuccess, setIsNavigationBlock
                                         <input 
                                             type="text" 
                                             name="barangayName"
-                                            value={formData.barangayName}
+                                            value={formData?.barangayName ?? ''}
                                             onChange={handleInputChange}
                                             className="w-full p-3 bg-white border border-gray-200 rounded-xl text-sm text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
                                         />
@@ -186,7 +174,7 @@ const Settings: React.FC<SettingsProps> = ({ onShowSuccess, setIsNavigationBlock
                                         <input 
                                             type="text" 
                                             name="municipality"
-                                            value={formData.municipality}
+                                            value={formData?.municipality ?? ''}
                                             onChange={handleInputChange}
                                             className="w-full p-3 bg-white border border-gray-200 rounded-xl text-sm text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
                                         />
@@ -196,7 +184,7 @@ const Settings: React.FC<SettingsProps> = ({ onShowSuccess, setIsNavigationBlock
                                         <input 
                                             type="text" 
                                             name="province"
-                                            value={formData.province}
+                                            value={formData?.province ?? ''}
                                             onChange={handleInputChange}
                                             className="w-full p-3 bg-white border border-gray-200 rounded-xl text-sm text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
                                         />
@@ -206,7 +194,7 @@ const Settings: React.FC<SettingsProps> = ({ onShowSuccess, setIsNavigationBlock
                                         <input 
                                             type="text" 
                                             name="telephone"
-                                            value={formData.telephone}
+                                            value={formData?.telephone ?? ''}
                                             onChange={handleInputChange}
                                             className="w-full p-3 bg-white border border-gray-200 rounded-xl text-sm text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
                                         />
@@ -228,7 +216,7 @@ const Settings: React.FC<SettingsProps> = ({ onShowSuccess, setIsNavigationBlock
                                         <input 
                                             type="text" 
                                             name="punongBarangay"
-                                            value={formData.punongBarangay}
+                                            value={formData?.punongBarangay ?? ''}
                                             onChange={handleInputChange}
                                             className="w-full max-w-md p-3 bg-white border border-gray-200 rounded-xl text-sm text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
                                         />
@@ -252,7 +240,7 @@ const Settings: React.FC<SettingsProps> = ({ onShowSuccess, setIsNavigationBlock
                                                     <input 
                                                         type="text" 
                                                         name={councilor.name}
-                                                        value={(formData as any)[councilor.name]}
+                                                        value={(formData as any)?.[councilor.name] ?? ''}
                                                         onChange={handleInputChange}
                                                         className="w-full p-3 bg-white border border-gray-200 rounded-xl text-sm text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
                                                     />
@@ -268,7 +256,7 @@ const Settings: React.FC<SettingsProps> = ({ onShowSuccess, setIsNavigationBlock
                                             <input 
                                                 type="text" 
                                                 name="skChairman"
-                                                value={formData.skChairman}
+                                                value={formData?.skChairman ?? ''}
                                                 onChange={handleInputChange}
                                                 className="w-full p-3 bg-white border border-gray-200 rounded-xl text-sm text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
                                             />
@@ -278,7 +266,7 @@ const Settings: React.FC<SettingsProps> = ({ onShowSuccess, setIsNavigationBlock
                                             <input 
                                                 type="text" 
                                                 name="treasurer"
-                                                value={formData.treasurer}
+                                                value={formData?.treasurer ?? ''}
                                                 onChange={handleInputChange}
                                                 className="w-full p-3 bg-white border border-gray-200 rounded-xl text-sm text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
                                             />
@@ -288,7 +276,7 @@ const Settings: React.FC<SettingsProps> = ({ onShowSuccess, setIsNavigationBlock
                                             <input 
                                                 type="text" 
                                                 name="secretary"
-                                                value={formData.secretary}
+                                                value={formData?.secretary ?? ''}
                                                 onChange={handleInputChange}
                                                 className="w-full p-3 bg-white border border-gray-200 rounded-xl text-sm text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
                                             />
@@ -322,7 +310,7 @@ const Settings: React.FC<SettingsProps> = ({ onShowSuccess, setIsNavigationBlock
                                                 <input 
                                                     type="text" 
                                                     name={doc.name}
-                                                    value={(formData as any)[doc.name]}
+                                                    value={(formData as any)?.[doc.name] ?? ''}
                                                     onChange={handleInputChange}
                                                     className="w-full pl-8 pr-4 py-3 bg-white border border-gray-200 rounded-xl text-sm text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
                                                 />
@@ -444,10 +432,15 @@ const Settings: React.FC<SettingsProps> = ({ onShowSuccess, setIsNavigationBlock
                     <div className="flex-none p-6 bg-white border-t border-gray-100 flex justify-end">
                         <button 
                             onClick={handleSave}
-                            className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded-xl flex items-center gap-2 text-sm font-bold transition-all shadow-lg shadow-blue-200 active:scale-95"
+                            disabled={saveMutation.isPending || !isDirty}
+                            className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded-xl flex items-center gap-2 text-sm font-bold transition-all shadow-lg shadow-blue-200 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                            <Save size={18} />
-                            Save Changes
+                            {saveMutation.isPending ? (
+                                <Loader2 size={18} className="animate-spin" />
+                            ) : (
+                                <Save size={18} />
+                            )}
+                            {saveMutation.isPending ? 'Saving...' : 'Save Changes'}
                         </button>
                     </div>
                 )}
