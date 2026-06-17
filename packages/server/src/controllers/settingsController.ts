@@ -114,11 +114,6 @@ export async function backupData(
       },
     };
 
-    res.setHeader("Content-Type", "application/json");
-    res.setHeader(
-      "Content-Disposition",
-      `attachment; filename="rbi-backup-${new Date().toISOString().slice(0, 10)}.json"`
-    );
     res.json(backup);
   } catch (err) {
     next(err);
