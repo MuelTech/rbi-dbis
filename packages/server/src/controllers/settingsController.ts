@@ -140,8 +140,8 @@ export async function restoreData(
       await tx.familyMember.deleteMany();
       await tx.familyPet.deleteMany();
       await tx.familyVehicle.deleteMany();
-      await tx.address.deleteMany();
       await tx.family.deleteMany();
+      await tx.address.deleteMany();
       await tx.household.deleteMany();
       await tx.block.deleteMany();
       await tx.resident.deleteMany();
