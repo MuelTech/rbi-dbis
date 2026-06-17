@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import ContentCard from '@/components/ui/ContentCard';
+import ConfirmationModal from '@/components/ui/ConfirmationModal';
 import { Image, MapPin, Users, Save, Upload, Settings as SettingsIcon, FileText, List, Plus, X, Database, Download, UploadCloud, History, FileUp, Loader2 } from 'lucide-react';
 import { settingsService, BarangaySettings } from '@/services/settings';
 
@@ -29,12 +30,41 @@ const Settings: React.FC<SettingsProps> = ({ onShowSuccess, setIsNavigationBlock
     }, [settings]);
 
     const [newPurpose, setNewPurpose] = useState('');
+    const [lastBackup, setLastBackup] = useState<string | null>(null);
+    const [showRestoreConfirm, setShowRestoreConfirm] = useState(false);
+    const [pendingRestoreFile, setPendingRestoreFile] = useState<File | null>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
 
     const saveMutation = useMutation({
         mutationFn: (data: BarangaySettings) => settingsService.update(data),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['settings'] });
             if (onShowSuccess) onShowSuccess('Settings saved successfully');
+            if (setIsNavigationBlocked) setIsNavigationBlocked(false);
+        },
+    });
+
+    const backupMutation = useMutation({
+        mutationFn: () => settingsService.backup(),
+        onSuccess: (data) => {
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `rbi-backup-${new Date().toISOString().slice(0, 10)}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+            const now = new Date();
+            setLastBackup(now.toLocaleString());
+            if (onShowSuccess) onShowSuccess('Backup downloaded successfully');
+        },
+    });
+
+    const restoreMutation = useMutation({
+        mutationFn: (data: any) => settingsService.restore(data),
+        onSuccess: () => {
+            queryClient.invalidateQueries();
+            if (onShowSuccess) onShowSuccess('Data restored successfully. Please log in again.');
             if (setIsNavigationBlocked) setIsNavigationBlocked(false);
         },
     });
@@ -67,6 +97,31 @@ const Settings: React.FC<SettingsProps> = ({ onShowSuccess, setIsNavigationBlock
         if (!formData) return;
         const payload = { ...formData, purposes };
         await saveMutation.mutateAsync(payload);
+    };
+
+    const handleBackup = () => {
+        backupMutation.mutate();
+    };
+
+    const handleRestoreFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        setPendingRestoreFile(file);
+        setShowRestoreConfirm(true);
+        if (fileInputRef.current) fileInputRef.current.value = '';
+    };
+
+    const handleRestoreConfirm = async () => {
+        if (!pendingRestoreFile) return;
+        try {
+            const text = await pendingRestoreFile.text();
+            const backup = JSON.parse(text);
+            await restoreMutation.mutateAsync(backup);
+        } catch {
+            if (onShowSuccess) onShowSuccess('Invalid backup file');
+        }
+        setShowRestoreConfirm(false);
+        setPendingRestoreFile(null);
     };
 
     const tabs = [
@@ -387,12 +442,20 @@ const Settings: React.FC<SettingsProps> = ({ onShowSuccess, setIsNavigationBlock
                                             <History size={14} />
                                             <span className="text-xs font-medium">Last Backup:</span>
                                         </div>
-                                        <p className="text-sm font-bold text-gray-900">October 24, 2024 at 09:30 AM</p>
+                                        <p className="text-sm font-bold text-gray-900">{lastBackup ?? 'No backup yet'}</p>
                                     </div>
 
-                                    <button className="w-full bg-[#10B981] hover:bg-green-600 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-all shadow-lg shadow-green-200 active:scale-95 mt-auto">
-                                        <Download size={18} />
-                                        Download Backup
+                                    <button 
+                                        onClick={handleBackup}
+                                        disabled={backupMutation.isPending}
+                                        className="w-full bg-[#10B981] hover:bg-green-600 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-all shadow-lg shadow-green-200 active:scale-95 mt-auto disabled:opacity-50 disabled:cursor-not-allowed"
+                                    >
+                                        {backupMutation.isPending ? (
+                                            <Loader2 size={18} className="animate-spin" />
+                                        ) : (
+                                            <Download size={18} />
+                                        )}
+                                        {backupMutation.isPending ? 'Backing up...' : 'Download Backup'}
                                     </button>
                                 </div>
                             </div>
@@ -417,12 +480,37 @@ const Settings: React.FC<SettingsProps> = ({ onShowSuccess, setIsNavigationBlock
                                         Warning: This action will overwrite existing data.
                                     </p>
 
-                                    <div className="w-full border-2 border-dashed border-gray-200 rounded-xl p-8 flex flex-col items-center justify-center cursor-pointer hover:border-blue-400 hover:bg-blue-50 transition-all group mt-auto">
-                                        <UploadCloud className="w-8 h-8 text-gray-400 group-hover:text-blue-500 mb-2 transition-colors" />
-                                        <span className="text-sm font-bold text-gray-500 group-hover:text-blue-600 transition-colors">Select File to Restore</span>
-                                    </div>
+                                    <input
+                                        ref={fileInputRef}
+                                        type="file"
+                                        accept=".json"
+                                        onChange={handleRestoreFileSelect}
+                                        className="hidden"
+                                    />
+                                    <button
+                                        onClick={() => fileInputRef.current?.click()}
+                                        disabled={restoreMutation.isPending}
+                                        className="w-full border-2 border-dashed border-gray-200 rounded-xl p-8 flex flex-col items-center justify-center cursor-pointer hover:border-blue-400 hover:bg-blue-50 transition-all group mt-auto disabled:opacity-50 disabled:cursor-not-allowed"
+                                    >
+                                        {restoreMutation.isPending ? (
+                                            <Loader2 className="w-8 h-8 text-blue-500 animate-spin mb-2" />
+                                        ) : (
+                                            <UploadCloud className="w-8 h-8 text-gray-400 group-hover:text-blue-500 mb-2 transition-colors" />
+                                        )}
+                                        <span className="text-sm font-bold text-gray-500 group-hover:text-blue-600 transition-colors">
+                                            {restoreMutation.isPending ? 'Restoring...' : 'Select File to Restore'}
+                                        </span>
+                                    </button>
                                 </div>
                             </div>
+
+                            <ConfirmationModal
+                                isOpen={showRestoreConfirm}
+                                onClose={() => { setShowRestoreConfirm(false); setPendingRestoreFile(null); }}
+                                onConfirm={handleRestoreConfirm}
+                                title="Restore Backup?"
+                                message={`This will overwrite all current data with the contents of "${pendingRestoreFile?.name}". This action cannot be undone. Continue?`}
+                            />
                         </div>
                     )}
                 </div>
