@@ -115,10 +115,19 @@ const Settings: React.FC<SettingsProps> = ({ onShowSuccess, setIsNavigationBlock
         if (!pendingRestoreFile) return;
         try {
             const text = await pendingRestoreFile.text();
-            const backup = JSON.parse(text);
+            let backup;
+            try {
+                backup = JSON.parse(text);
+            } catch {
+                if (onShowSuccess) onShowSuccess('Invalid backup file: not valid JSON');
+                setShowRestoreConfirm(false);
+                setPendingRestoreFile(null);
+                return;
+            }
             await restoreMutation.mutateAsync(backup);
-        } catch {
-            if (onShowSuccess) onShowSuccess('Invalid backup file');
+        } catch (err: any) {
+            const msg = err?.message || 'Restore failed';
+            if (onShowSuccess) onShowSuccess(`Restore failed: ${msg}`);
         }
         setShowRestoreConfirm(false);
         setPendingRestoreFile(null);

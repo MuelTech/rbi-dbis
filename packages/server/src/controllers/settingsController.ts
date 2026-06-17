@@ -327,7 +327,8 @@ export async function restoreData(
     });
 
     res.json({ success: true, message: "Data restored successfully" });
-  } catch (err) {
-    next(err);
+  } catch (err: any) {
+    console.error("Restore error:", err);
+    res.status(500).json({ error: err?.message ?? "Restore failed" });
   }
 }
