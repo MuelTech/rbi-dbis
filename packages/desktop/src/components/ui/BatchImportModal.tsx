@@ -411,8 +411,10 @@ const BatchImportModal: React.FC<BatchImportModalProps> = ({
   const handleImport = useCallback(async () => {
     setImporting(true);
     try {
-      const successRows = parsedRows.filter(r => r.status === 'success').map(r => r.data);
-      const families = parseGroupedRows(successRows);
+      const importableRows = parsedRows.filter(r => 
+        r.status === 'success' || (r.status === 'duplicate' && duplicateAction === 'overwrite')
+      ).map(r => r.data);
+      const families = parseGroupedRows(importableRows);
       const result = await residentsService.batchImport({ families, duplicateAction });
       setImportResult({
         success: result.created,
