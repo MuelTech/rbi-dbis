@@ -10,6 +10,7 @@ import ActivityLogs from '@/pages/ActivityLogs';
 import Archived from '@/pages/Archived';
 import Settings from '@/pages/Settings';
 import Login from '@/pages/Login';
+import ChangePassword from '@/pages/ChangePassword';
 import ConfirmationModal from '@/components/ui/ConfirmationModal';
 import SuccessToast from '@/components/ui/SuccessToast';
 import { useAuth } from '@/context/AuthContext';
@@ -17,7 +18,7 @@ import { useAuth } from '@/context/AuthContext';
 const App: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { user, logout } = useAuth();
+  const { user, mustChangePassword, logout } = useAuth();
   
   const [isNavigationBlocked, setIsNavigationBlocked] = useState(false);
   const [showUnsavedModal, setShowUnsavedModal] = useState(false);
@@ -114,6 +115,10 @@ const App: React.FC = () => {
   }
 
   if (!user) return null; // Or loading spinner
+
+  if (mustChangePassword) {
+    return <ChangePassword />;
+  }
 
   return (
     <div className="flex h-screen w-full bg-[#F3F4F6] overflow-hidden print:overflow-visible print:bg-white print:h-auto">
