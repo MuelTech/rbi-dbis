@@ -374,17 +374,31 @@ export async function batchImportResidents(
           }
 
           const hhNum = String(fam.household?.household_number ?? "").padStart(3, "0");
-          const createdHousehold = await tx.household.create({
-            data: { brgyHouseholdNo: hhNum, blockId: block.id },
+          let createdHousehold = await tx.household.findFirst({
+            where: { blockId: block.id, brgyHouseholdNo: hhNum },
           });
+          if (!createdHousehold) {
+            createdHousehold = await tx.household.create({
+              data: { brgyHouseholdNo: hhNum, blockId: block.id },
+            });
+          }
 
-          const createdAddress = await tx.address.create({
-            data: {
+          let createdAddress = await tx.address.findFirst({
+            where: {
               houseNo: fam.address?.house_number ?? "",
               streetName: fam.address?.street_name ?? "",
               alleyName: fam.address?.alley ?? "",
             },
           });
+          if (!createdAddress) {
+            createdAddress = await tx.address.create({
+              data: {
+                houseNo: fam.address?.house_number ?? "",
+                streetName: fam.address?.street_name ?? "",
+                alleyName: fam.address?.alley ?? "",
+              },
+            });
+          }
 
           const head = fam.head;
           const headData = {

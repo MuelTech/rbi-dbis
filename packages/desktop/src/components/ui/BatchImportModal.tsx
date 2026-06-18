@@ -263,7 +263,7 @@ const BatchImportModal: React.FC<BatchImportModalProps> = ({
   const importableCount = successCount + (duplicateAction === 'overwrite' ? duplicateCount : 0);
   const totalRows = parsedRows.length;
 
-  const successFamilies = parseGroupedRows(parsedRows.filter((r) => r.status === 'success').map((r) => r.data));
+  const successFamilies = parseGroupedRows(parsedRows.map((r) => r.data));
 
   const resetState = useCallback(() => {
     setStep(1);
@@ -571,9 +571,10 @@ const BatchImportModal: React.FC<BatchImportModalProps> = ({
                 );
                 const allRowsForFamily = parsedRows.filter((r) => r.data.family_id === family.family_id);
                 const hasError = allRowsForFamily.some((r) => r.status === 'error');
+                const allDuplicate = allRowsForFamily.every((r) => r.status === 'duplicate');
                 const firstError = allRowsForFamily.find((r) => r.status === 'error');
-                const familyStatus: ImportRowStatus = hasError ? 'error' : 'success';
-                const familyMessage = hasError && firstError ? firstError.message : '';
+                const familyStatus: ImportRowStatus = hasError ? 'error' : allDuplicate ? 'duplicate' : 'success';
+                const familyMessage = hasError && firstError ? firstError.message : allDuplicate ? 'All residents already exist' : '';
 
                 return (
                   <tr key={family.family_id} className="hover:bg-gray-50/50 transition-colors">
