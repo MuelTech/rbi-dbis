@@ -60,6 +60,7 @@ export async function login(req: Request, res: Response, next: NextFunction) {
         roleType: user.roleType,
         isActive: user.isActive,
         permission: user.permission,
+        mustChangePassword: user.mustChangePassword,
         lastLogin: new Date().toISOString(),
         firstName: userInfo?.firstName ?? "",
         lastName: userInfo?.lastName ?? "",
@@ -93,12 +94,42 @@ export async function me(req: Request, res: Response, next: NextFunction) {
       roleType: user.roleType,
       isActive: user.isActive,
       permission: user.permission,
+      mustChangePassword: user.mustChangePassword,
       lastLogin: user.lastLogin?.toISOString() ?? null,
       firstName: user.userInfo?.firstName ?? "",
       lastName: user.userInfo?.lastName ?? "",
       phoneNumber: user.userInfo?.phoneNumber ?? "",
       profileImage: user.userInfo?.profileImage ?? null,
     });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function changePassword(
+  req: Request,
+  res: Response,
+  next: NextFunction
+) {
+  try {
+    const authUser = req.user!;
+    const { newPassword } = req.body;
+
+    if (!newPassword || newPassword.length < 6) {
+      res.status(400).json({ error: "Password must be at least 6 characters" });
+      return;
+    }
+
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    await prisma.user.update({
+      where: { id: authUser.id },
+      data: {
+        password: hashedPassword,
+        mustChangePassword: false,
+      },
+    });
+
+    res.json({ success: true });
   } catch (err) {
     next(err);
   }
