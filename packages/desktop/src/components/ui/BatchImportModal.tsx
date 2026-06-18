@@ -282,17 +282,14 @@ const BatchImportModal: React.FC<BatchImportModalProps> = ({
     onClose();
   }, [resetState, onClose]);
 
-  const checkDuplicate = useCallback(
-    (row: Record<string, string>): boolean => {
-      return existingResidents.some(
-        (r) =>
-          r.lastName?.toLowerCase().trim() === row.last_name?.toLowerCase().trim() &&
-          r.firstName?.toLowerCase().trim() === row.first_name?.toLowerCase().trim() &&
-          r.dateOfBirth === row.date_of_birth
-      );
-    },
-    [existingResidents]
-  );
+  const checkDuplicate = (row: Record<string, string>): boolean => {
+    return existingResidents.some(
+      (r) =>
+        r.lastName?.toLowerCase().trim() === row.last_name?.toLowerCase().trim() &&
+        r.firstName?.toLowerCase().trim() === row.first_name?.toLowerCase().trim() &&
+        r.dateOfBirth === row.date_of_birth
+    );
+  };
 
   const processFile = useCallback(
     (file: File) => {
@@ -370,7 +367,7 @@ const BatchImportModal: React.FC<BatchImportModalProps> = ({
       };
       reader.readAsArrayBuffer(file);
     },
-    [checkDuplicate]
+    [existingResidents]
   );
 
   const handleFileUpload = useCallback(
