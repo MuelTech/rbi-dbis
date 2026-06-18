@@ -444,14 +444,33 @@ export async function batchImportResidents(
             totalCreated++;
           }
 
-          const family = await tx.family.create({
-            data: {
-              familyName: headData.lastName,
-              householdId: createdHousehold.id,
-              headPersonId: headResident.id,
-              addressId: createdAddress.id,
-            },
+          let family = await tx.family.findFirst({
+            where: { headPersonId: headResident.id },
           });
+          if (family) {
+            family = await tx.family.update({
+              where: { id: family.id },
+              data: {
+                familyName: headData.lastName,
+                householdId: createdHousehold.id,
+                addressId: createdAddress.id,
+              },
+            });
+          } else {
+            family = await tx.family.create({
+              data: {
+                familyName: headData.lastName,
+                householdId: createdHousehold.id,
+                headPersonId: headResident.id,
+                addressId: createdAddress.id,
+              },
+            });
+          }
+
+          // Delete existing pet/vehicle/members for overwrite
+          await tx.familyPet.deleteMany({ where: { familyId: family.id } });
+          await tx.familyVehicle.deleteMany({ where: { familyId: family.id } });
+          await tx.familyMember.deleteMany({ where: { familyId: family.id } });
 
           if (fam.pet?.has_pets === "Yes" || fam.pet?.has_pets === true) {
             await tx.familyPet.create({
