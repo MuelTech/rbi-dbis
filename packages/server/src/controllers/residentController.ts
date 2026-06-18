@@ -361,8 +361,6 @@ export async function batchImportResidents(
     let totalSkipped = 0;
     const errors: string[] = [];
 
-    console.log(`BATCH IMPORT: ${families.length} families, duplicateAction=${duplicateAction}`);
-
     for (const fam of families) {
       try {
         await prisma.$transaction(async (tx) => {
@@ -552,13 +550,9 @@ export async function batchImportResidents(
           }
         });
       } catch (err: any) {
-        console.error(`BATCH IMPORT ERROR for family ${fam.head?.last_name ?? "unknown"}:`, err.message, err.code);
         errors.push(`Family ${fam.head?.last_name ?? "unknown"}: ${err.message}`);
       }
     }
-
-    console.log(`BATCH IMPORT RESULT: created=${totalCreated}, updated=${totalUpdated}, skipped=${totalSkipped}, errors=${errors.length}`);
-    if (errors.length > 0) console.log(`BATCH IMPORT ERRORS:`, errors);
 
     res.json({
       created: totalCreated,
