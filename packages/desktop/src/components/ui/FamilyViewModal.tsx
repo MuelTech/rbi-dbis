@@ -268,14 +268,14 @@ const FamilyViewModal: React.FC<FamilyViewModalProps> = ({ isOpen, onClose, fami
 
     return (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 sm:p-6">
-            <div 
-                className="absolute inset-0 bg-gray-900/20 backdrop-blur-sm transition-opacity" 
+            <div
+                className="absolute inset-0 bg-gray-900/20 backdrop-blur-sm transition-opacity"
                 onClick={onClose}
             />
             <div className="relative w-full max-w-5xl bg-white rounded-2xl shadow-2xl flex flex-col h-[90vh] animate-in fade-in zoom-in-95 duration-200 overflow-hidden">
                 {viewMode === 'add' ? (
                     <div className="flex-1 min-h-0 flex flex-col w-full">
-                        <AddMemberForm 
+                        <AddMemberForm
                             onCancel={() => setViewMode('view')}
                             onSubmit={async (payload: AddFamilyMemberPayload) => {
                                 await familiesService.addMember(familyId, payload);
@@ -331,14 +331,14 @@ const FamilyViewModal: React.FC<FamilyViewModalProps> = ({ isOpen, onClose, fami
                                             </div>
                                             {isEditing ? (
                                                 <div className="flex items-center gap-2">
-                                                    <button 
+                                                    <button
                                                         onClick={handleCancelClick}
                                                         disabled={isSaving}
                                                         className="px-4 py-1.5 text-[13px] font-medium text-gray-500 hover:text-gray-700 transition-colors disabled:opacity-50"
                                                     >
                                                         Cancel
                                                     </button>
-                                                    <button 
+                                                    <button
                                                         onClick={handleSaveClick}
                                                         disabled={isSaving}
                                                         className="flex items-center gap-2 px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-[13px] font-bold transition-colors shadow-sm shadow-blue-200 disabled:opacity-50"
@@ -348,7 +348,7 @@ const FamilyViewModal: React.FC<FamilyViewModalProps> = ({ isOpen, onClose, fami
                                                     </button>
                                                 </div>
                                             ) : (
-                                                <button 
+                                                <button
                                                     onClick={handleEditClick}
                                                     className="flex items-center gap-2 px-3 py-1.5 border border-gray-200 rounded-lg text-[13px] font-medium text-gray-600 hover:bg-gray-50 transition-colors"
                                                 >
@@ -357,7 +357,7 @@ const FamilyViewModal: React.FC<FamilyViewModalProps> = ({ isOpen, onClose, fami
                                                 </button>
                                             )}
                                         </div>
-                                        
+
                                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
                                             <div className="space-y-1.5">
                                                 <label className="text-[12px] font-bold text-gray-500">Family Head</label>
@@ -405,9 +405,8 @@ const FamilyViewModal: React.FC<FamilyViewModalProps> = ({ isOpen, onClose, fami
                                                                 if (e.target.value !== 'Other') setPrevHeadRelOther('');
                                                                 setHeadValidationError(null);
                                                             }}
-                                                            className={`w-full px-3 py-2.5 bg-white border rounded-xl text-[13px] font-medium text-gray-900 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all appearance-none pr-8 ${
-                                                                headValidationError && !prevHeadRelType ? 'border-red-500' : 'border-gray-200'
-                                                            }`}
+                                                            className={`w-full px-3 py-2.5 bg-white border rounded-xl text-[13px] font-medium text-gray-900 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all appearance-none pr-8 ${headValidationError && !prevHeadRelType ? 'border-red-500' : 'border-gray-200'
+                                                                }`}
                                                         >
                                                             <option value="">Select relationship...</option>
                                                             {RELATIONSHIP_OPTIONS.map((opt) => (
@@ -430,9 +429,8 @@ const FamilyViewModal: React.FC<FamilyViewModalProps> = ({ isOpen, onClose, fami
                                                                 setHeadValidationError(null);
                                                             }}
                                                             placeholder="e.g. Grandparent, Uncle"
-                                                            className={`w-full px-3 py-2.5 bg-white border rounded-xl text-[13px] font-medium text-gray-900 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all ${
-                                                                headValidationError && prevHeadRelType === 'Other' && !prevHeadRelOther.trim() ? 'border-red-500' : 'border-gray-200'
-                                                            }`}
+                                                            className={`w-full px-3 py-2.5 bg-white border rounded-xl text-[13px] font-medium text-gray-900 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all ${headValidationError && prevHeadRelType === 'Other' && !prevHeadRelOther.trim() ? 'border-red-500' : 'border-gray-200'
+                                                                }`}
                                                         />
                                                     </div>
                                                 )}
@@ -487,7 +485,7 @@ const FamilyViewModal: React.FC<FamilyViewModalProps> = ({ isOpen, onClose, fami
                                                 </div>
                                                 <h3 className="text-[15px] font-bold text-gray-900">Family Members</h3>
                                             </div>
-                                            <button 
+                                            <button
                                                 onClick={() => setViewMode('add')}
                                                 className="flex items-center gap-2 px-3 py-1.5 bg-[#10B981] hover:bg-green-600 text-white rounded-lg text-[13px] font-bold transition-colors shadow-sm shadow-green-200"
                                             >
@@ -525,17 +523,16 @@ const FamilyViewModal: React.FC<FamilyViewModalProps> = ({ isOpen, onClose, fami
                                                                 <td className="py-3 px-4 text-[13px] text-gray-600">{member.age}</td>
                                                                 <td className="py-3 px-4 text-[13px] text-gray-600">{member.voter}</td>
                                                                 <td className="py-3 px-4">
-                                                                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-md text-[11px] font-bold ${
-                                                                        member.status === 'Active' ? 'text-green-700 bg-green-50' :
-                                                                        member.status === 'Deceased' ? 'text-red-700 bg-red-50' :
-                                                                        'text-orange-700 bg-orange-50'
-                                                                    }`}>
+                                                                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-md text-[11px] font-bold ${member.status === 'Active' ? 'text-green-700 bg-green-50' :
+                                                                            member.status === 'Deceased' ? 'text-red-700 bg-red-50' :
+                                                                                'text-orange-700 bg-orange-50'
+                                                                        }`}>
                                                                         {member.status}
                                                                     </span>
                                                                 </td>
                                                                 <td className="py-3 px-6">
                                                                     <div className="flex items-center justify-center gap-2">
-                                                                        <button 
+                                                                        <button
                                                                             onClick={() => handleViewResident(member)}
                                                                             className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                                                                         >
@@ -556,10 +553,10 @@ const FamilyViewModal: React.FC<FamilyViewModalProps> = ({ isOpen, onClose, fami
 
                         {/* Footer */}
                         <div className="p-6 border-t border-gray-100 bg-white flex items-center justify-end gap-3 rounded-b-2xl">
-                            <button className="flex items-center gap-2 px-4 py-2.5 border border-blue-200 text-blue-600 hover:bg-blue-50 rounded-xl font-bold text-[13px] transition-colors">
+                            {/* <button className="flex items-center gap-2 px-4 py-2.5 border border-blue-200 text-blue-600 hover:bg-blue-50 rounded-xl font-bold text-[13px] transition-colors">
                                 <FileText size={16} />
                                 Generate RBI
-                            </button>
+                            </button> */}
                             <button className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-[13px] shadow-lg shadow-blue-200 transition-all active:scale-95">
                                 <CreditCard size={16} />
                                 Generate ID
@@ -568,7 +565,7 @@ const FamilyViewModal: React.FC<FamilyViewModalProps> = ({ isOpen, onClose, fami
                     </>
                 )}
             </div>
-            
+
             <ResidentProfileModal
                 isOpen={showResidentProfile}
                 onClose={() => {
