@@ -16,6 +16,7 @@ export interface User {
   lastLogin?: string;
   status: 'Active' | 'Disabled';
   isActive?: boolean;
+  mustChangePassword?: boolean;
   userInfo?: {
     firstName: string;
     lastName: string;

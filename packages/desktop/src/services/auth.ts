@@ -6,6 +6,7 @@ export interface AuthUser {
   username: string;
   roleType: string;
   isActive: boolean;
+  mustChangePassword?: boolean;
   permission: string | null;
   lastLogin: string | null;
   firstName: string;
@@ -24,4 +25,7 @@ export const authService = {
     api.post<LoginResponse>("/auth/login", { username, password }),
 
   me: () => api.get<AuthUser>("/auth/me"),
+
+  changePassword: (newPassword: string) =>
+    api.put<{ success: boolean }>("/auth/change-password", { newPassword }),
 };
