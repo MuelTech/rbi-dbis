@@ -187,6 +187,7 @@ model User {
   isActive   Boolean   @default(true) @map("is_active")
   lastLogin  DateTime? @map("last_login")
   permission String?   @db.VarChar(50)
+  mustChangePassword Boolean   @default(false) @map("must_change_password")
   createdAt  DateTime  @default(now()) @map("created_at")
   updatedAt  DateTime  @updatedAt @map("updated_at")
 
