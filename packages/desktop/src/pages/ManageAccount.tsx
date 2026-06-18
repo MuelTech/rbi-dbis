@@ -258,14 +258,15 @@ const ManageAccount: React.FC<ManageAccountProps> = ({ onShowSuccess, setIsNavig
                                             <input 
                                                 type="password" 
                                                 name="password"
-                                                value={formData.password}
+                                                value={formData.mustChangePassword ? '' : formData.password}
                                                 onChange={handleInputChange}
-                                                placeholder={isEditing ? "Unchanged" : "......."}
+                                                disabled={formData.mustChangePassword}
+                                                placeholder={formData.mustChangePassword ? 'brgy418 (default)' : isEditing ? "Unchanged" : "......."}
                                                 className={`w-full pl-10 pr-4 py-2.5 rounded-xl border text-sm focus:outline-none focus:ring-1 transition-all placeholder:text-gray-400 ${
                                                     errors.password 
                                                         ? 'border-red-500 focus:border-red-500 focus:ring-red-500' 
                                                         : 'border-gray-200 focus:border-blue-500 focus:ring-blue-500'
-                                                }`}
+                                                } ${formData.mustChangePassword ? 'bg-gray-50 text-gray-400 cursor-not-allowed' : ''}`}
                                             />
                                         </div>
                                         {errors.password && <p className="text-xs text-red-500 font-medium ml-1">{errors.password}</p>}
