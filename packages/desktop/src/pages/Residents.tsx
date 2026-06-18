@@ -203,6 +203,14 @@ const Residents: React.FC<ResidentsProps> = ({ setIsNavigationBlocked, onShowSuc
     const totalResidents = data?.meta.total ?? 0;
     const totalPages = data?.meta.totalPages ?? 0;
 
+    // All residents for duplicate checking (not paginated)
+    const { data: allResidentsData } = useQuery({
+        queryKey: ['residents-all'],
+        queryFn: () => residentsService.list({ page: 1, pageSize: 10000 }),
+        enabled: isBatchImportOpen,
+    });
+    const allResidents = allResidentsData?.data ?? [];
+
     const indexOfFirstItem = (currentPage - 1) * itemsPerPage;
     const indexOfLastItem = indexOfFirstItem + residents.length;
     const emptyRows = Math.max(0, itemsPerPage - residents.length);
@@ -620,7 +628,7 @@ const Residents: React.FC<ResidentsProps> = ({ setIsNavigationBlocked, onShowSuc
                     queryClient.invalidateQueries({ queryKey: ['residents'] });
                     queryClient.invalidateQueries({ queryKey: ['demographics'] });
                 }}
-                existingResidents={residents}
+                existingResidents={allResidents}
             />
 
             <SuccessToast
