@@ -18,6 +18,7 @@ interface ImportRow {
 
 interface ImportResult {
   success: number;
+  updated: number;
   duplicates: number;
   errors: number;
 }
@@ -249,7 +250,7 @@ const BatchImportModal: React.FC<BatchImportModalProps> = ({
   const [parsedRows, setParsedRows] = useState<ImportRow[]>([]);
   const [duplicateAction, setDuplicateAction] = useState<'skip' | 'overwrite'>('skip');
   const [importing, setImporting] = useState(false);
-  const [importResult, setImportResult] = useState<ImportResult>({ success: 0, duplicates: 0, errors: 0 });
+  const [importResult, setImportResult] = useState<ImportResult>({ success: 0, updated: 0, duplicates: 0, errors: 0 });
   const [fileError, setFileError] = useState('');
   const [isDragging, setIsDragging] = useState(false);
   const existingResidentsRef = useRef(existingResidents);
@@ -271,7 +272,7 @@ const BatchImportModal: React.FC<BatchImportModalProps> = ({
     setParsedRows([]);
     setDuplicateAction('skip');
     setImporting(false);
-    setImportResult({ success: 0, duplicates: 0, errors: 0 });
+    setImportResult({ success: 0, updated: 0, duplicates: 0, errors: 0 });
     setFileError('');
     setIsDragging(false);
     if (fileInputRef.current) {
@@ -418,13 +419,14 @@ const BatchImportModal: React.FC<BatchImportModalProps> = ({
       const result = await residentsService.batchImport({ families, duplicateAction });
       setImportResult({
         success: result.created,
+        updated: result.updated,
         duplicates: result.skipped,
         errors: result.errors.length,
       });
       setImporting(false);
       setStep(3);
     } catch (err: any) {
-      setImportResult({ success: 0, duplicates: 0, errors: 1 });
+      setImportResult({ success: 0, updated: 0, duplicates: 0, errors: 1 });
       setImporting(false);
       setStep(3);
     }
@@ -614,10 +616,8 @@ const BatchImportModal: React.FC<BatchImportModalProps> = ({
           <div className="text-[13px] font-medium text-[#166534]/70">Imported</div>
         </div>
         <div className="bg-[#FFFBEB] border border-orange-200 rounded-2xl p-4 text-center">
-          <div className="text-2xl font-bold text-[#9A3412]">{importResult.duplicates}</div>
-          <div className="text-[13px] font-medium text-[#9A3412]/70">
-            {duplicateAction === 'skip' ? 'Skipped' : 'Overwritten'}
-          </div>
+          <div className="text-2xl font-bold text-[#9A3412]">{importResult.updated}</div>
+          <div className="text-[13px] font-medium text-[#9A3412]/70">Overwritten</div>
         </div>
         <div className="bg-[#FEF2F2] border border-red-200 rounded-2xl p-4 text-center">
           <div className="text-2xl font-bold text-[#991B1B]">{importResult.errors}</div>
