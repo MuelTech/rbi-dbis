@@ -5,10 +5,12 @@ import { authService, type AuthUser } from '../services/auth';
 
 interface AuthContextType {
   user: User | null;
+  mustChangePassword: boolean;
   login: (username: string, password: string) => Promise<boolean>;
   logout: () => void;
   /** Exposed so ManageAccount and other CRUD pages can still operate on users lists via their own service calls */
   refreshUser: () => Promise<void>;
+  changePassword: (newPassword: string) => Promise<boolean>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -28,11 +30,13 @@ function mapAuthUser(au: AuthUser): User {
     lastLogin: au.lastLogin ?? undefined,
     status: au.isActive ? 'Active' : 'Disabled',
     isActive: au.isActive,
+    mustChangePassword: au.mustChangePassword ?? false,
   };
 }
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
+  const [mustChangePassword, setMustChangePassword] = useState(false);
   const [initializing, setInitializing] = useState(true);
   const navigate = useNavigate();
 
@@ -42,6 +46,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     localStorage.removeItem('currentUser');
     navigate('/login');
   }, [navigate]);
+
+  const changePassword = useCallback(async (newPassword: string): Promise<boolean> => {
+    try {
+      await authService.changePassword(newPassword);
+      setMustChangePassword(false);
+      setUser(prev => prev ? { ...prev, mustChangePassword: false } : null);
+      return true;
+    } catch {
+      return false;
+    }
+  }, []);
 
   const refreshUser = useCallback(async () => {
     const token = localStorage.getItem('authToken');
@@ -53,6 +68,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const au = await authService.me();
       const mapped = mapAuthUser(au);
       setUser(mapped);
+      setMustChangePassword(mapped.mustChangePassword ?? false);
       localStorage.setItem('currentUser', JSON.stringify(mapped));
     } catch {
       logout();
@@ -65,6 +81,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       localStorage.setItem('authToken', token);
       const mapped = mapAuthUser(au);
       setUser(mapped);
+      setMustChangePassword(mapped.mustChangePassword ?? false);
       localStorage.setItem('currentUser', JSON.stringify(mapped));
       return true;
     } catch (err: any) {
@@ -84,6 +101,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         .then((au) => {
           const mapped = mapAuthUser(au);
           setUser(mapped);
+          setMustChangePassword(mapped.mustChangePassword ?? false);
           localStorage.setItem('currentUser', JSON.stringify(mapped));
         })
         .catch(() => {
@@ -103,7 +121,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   if (initializing) return null;
 
   return (
-    <AuthContext.Provider value={{ user, login, logout, refreshUser }}>
+    <AuthContext.Provider value={{ user, mustChangePassword, login, logout, refreshUser, changePassword }}>
       {children}
     </AuthContext.Provider>
   );
