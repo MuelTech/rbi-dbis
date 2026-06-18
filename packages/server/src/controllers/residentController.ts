@@ -342,3 +342,193 @@ export async function deleteResident(
     next(err);
   }
 }
+
+export async function batchImportResidents(
+  req: Request,
+  res: Response,
+  next: NextFunction
+) {
+  try {
+    const { families, duplicateAction = "skip" } = req.body;
+
+    if (!Array.isArray(families) || families.length === 0) {
+      res.status(400).json({ error: "families array is required" });
+      return;
+    }
+
+    let totalCreated = 0;
+    let totalUpdated = 0;
+    let totalSkipped = 0;
+    const errors: string[] = [];
+
+    for (const fam of families) {
+      try {
+        await prisma.$transaction(async (tx) => {
+          let block = await tx.block.findFirst({
+            where: { blockNumber: fam.household?.block },
+          });
+          if (!block) {
+            block = await tx.block.create({
+              data: { blockNumber: fam.household?.block },
+            });
+          }
+
+          const hhNum = String(fam.household?.household_number ?? "").padStart(3, "0");
+          const createdHousehold = await tx.household.create({
+            data: { brgyHouseholdNo: hhNum, blockId: block.id },
+          });
+
+          const createdAddress = await tx.address.create({
+            data: {
+              houseNo: fam.address?.house_number ?? "",
+              streetName: fam.address?.street_name ?? "",
+              alleyName: fam.address?.alley ?? "",
+            },
+          });
+
+          const head = fam.head;
+          const headData = {
+            lastName: head.last_name,
+            firstName: head.first_name,
+            middleName: head.middle_name || null,
+            suffix: head.suffix || null,
+            placeOfBirth: head.place_of_birth || null,
+            dateOfBirth: head.date_of_birth ? new Date(head.date_of_birth) : null,
+            sex: head.sex,
+            civilStatus: head.civil_status || null,
+            isVoter: head.is_voter === "Yes" || head.is_voter === true,
+            isPwd: head.is_pwd === "Yes" || head.is_pwd === true,
+            isSoloParent: head.is_solo_parent === "Yes" || head.is_solo_parent === true,
+            isOwner: head.is_owner === "Yes" || head.is_owner === true,
+            occupationType: head.occupation || null,
+            contactNumber: head.contact_number || null,
+            studentType: head.is_student === "Yes" ? (head.education_level || "Student") : null,
+          };
+
+          const existingHead = await tx.resident.findFirst({
+            where: {
+              lastName: headData.lastName,
+              firstName: headData.firstName,
+              dateOfBirth: headData.dateOfBirth,
+            },
+          });
+
+          let headResident;
+          if (existingHead) {
+            if (duplicateAction === "overwrite") {
+              headResident = await tx.resident.update({
+                where: { id: existingHead.id },
+                data: headData,
+              });
+              totalUpdated++;
+            } else {
+              totalSkipped++;
+              return;
+            }
+          } else {
+            headResident = await tx.resident.create({ data: headData });
+            totalCreated++;
+          }
+
+          const family = await tx.family.create({
+            data: {
+              familyName: headData.lastName,
+              householdId: createdHousehold.id,
+              headPersonId: headResident.id,
+              addressId: createdAddress.id,
+            },
+          });
+
+          if (fam.pet?.has_pets === "Yes" || fam.pet?.has_pets === true) {
+            await tx.familyPet.create({
+              data: {
+                familyId: family.id,
+                isPetOwner: true,
+                numberOfDogs: Number(fam.pet.number_of_dogs) || 0,
+                numberOfCats: Number(fam.pet.number_of_cats) || 0,
+                others: fam.pet.other_animals || null,
+              },
+            });
+          }
+
+          if (fam.vehicle?.has_vehicles === "Yes" || fam.vehicle?.has_vehicles === true) {
+            await tx.familyVehicle.create({
+              data: {
+                familyId: family.id,
+                numberOfMotorcycles: Number(fam.vehicle.number_of_motorcycles) || 0,
+                motorcyclePlateNumber: fam.vehicle.motorcycle_plate_numbers || null,
+                numberOfVehicles: Number(fam.vehicle.number_of_other_vehicles) || 0,
+                vehiclePlateNumber: fam.vehicle.vehicle_plate_numbers || null,
+              },
+            });
+          }
+
+          const members = fam.members ?? [];
+          for (const m of members) {
+            const memberData = {
+              lastName: m.last_name,
+              firstName: m.first_name,
+              middleName: m.middle_name || null,
+              suffix: m.suffix || null,
+              placeOfBirth: m.place_of_birth || null,
+              dateOfBirth: m.date_of_birth ? new Date(m.date_of_birth) : null,
+              sex: m.sex,
+              civilStatus: m.civil_status || null,
+              isVoter: m.is_voter === "Yes" || m.is_voter === true,
+              isPwd: m.is_pwd === "Yes" || m.is_pwd === true,
+              isSoloParent: m.is_solo_parent === "Yes" || m.is_solo_parent === true,
+              occupationType: m.occupation || null,
+              contactNumber: m.contact_number || null,
+              studentType: m.is_student === "Yes" ? (m.education_level || "Student") : null,
+            };
+
+            const existingMember = await tx.resident.findFirst({
+              where: {
+                lastName: memberData.lastName,
+                firstName: memberData.firstName,
+                dateOfBirth: memberData.dateOfBirth,
+              },
+            });
+
+            let memberResident;
+            if (existingMember) {
+              if (duplicateAction === "overwrite") {
+                memberResident = await tx.resident.update({
+                  where: { id: existingMember.id },
+                  data: memberData,
+                });
+                totalUpdated++;
+              } else {
+                totalSkipped++;
+                continue;
+              }
+            } else {
+              memberResident = await tx.resident.create({ data: memberData });
+              totalCreated++;
+            }
+
+            await tx.familyMember.create({
+              data: {
+                familyId: family.id,
+                residentId: memberResident.id,
+                relationshipType: m.relationship,
+              },
+            });
+          }
+        });
+      } catch (err: any) {
+        errors.push(`Family ${fam.head?.last_name ?? "unknown"}: ${err.message}`);
+      }
+    }
+
+    res.json({
+      created: totalCreated,
+      updated: totalUpdated,
+      skipped: totalSkipped,
+      families: families.length,
+      errors,
+    });
+  } catch (err) {
+    next(err);
+  }
+}
