@@ -13,7 +13,8 @@ const initialFormState = {
     phoneNumber: '',
     status: true,
     role: 'Admin' as 'Admin' | 'SuperAdmin',
-    permission: 'Resident Access' as 'Full Access' | 'Resident Access' | 'Document Access' | 'Resident & Document Access'
+    permission: 'Resident Access' as 'Full Access' | 'Resident Access' | 'Document Access' | 'Resident & Document Access',
+    mustChangePassword: true,
 };
 
 interface ManageAccountProps {
@@ -102,7 +103,8 @@ const ManageAccount: React.FC<ManageAccountProps> = ({ onShowSuccess, setIsNavig
             phoneNumber: user.phoneNumber || '',
             status: user.status === 'Active',
             role: user.role,
-            permission: user.permission
+            permission: user.permission,
+            mustChangePassword: user.mustChangePassword ?? false,
         };
         setFormData(editData);
         setPristineData(editData);
@@ -138,6 +140,7 @@ const ManageAccount: React.FC<ManageAccountProps> = ({ onShowSuccess, setIsNavig
             firstName: formData.firstName,
             lastName: formData.lastName,
             phoneNumber: formData.phoneNumber,
+            mustChangePassword: formData.mustChangePassword,
         };
         if (formData.password) payload.password = formData.password;
 
@@ -266,6 +269,18 @@ const ManageAccount: React.FC<ManageAccountProps> = ({ onShowSuccess, setIsNavig
                                             />
                                         </div>
                                         {errors.password && <p className="text-xs text-red-500 font-medium ml-1">{errors.password}</p>}
+                                    </div>
+                                    {/* Must Change Password */}
+                                    <div className="space-y-2 col-span-2">
+                                        <label className="flex items-center gap-3 cursor-pointer">
+                                            <input
+                                                type="checkbox"
+                                                checked={formData.mustChangePassword}
+                                                onChange={(e) => setFormData(prev => ({ ...prev, mustChangePassword: e.target.checked }))}
+                                                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                                            />
+                                            <span className="text-[13px] font-bold text-gray-600">Force password change on first login</span>
+                                        </label>
                                     </div>
                                     {/* Phone Number */}
                                     <div className="space-y-2">
