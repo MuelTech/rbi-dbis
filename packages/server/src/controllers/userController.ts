@@ -72,6 +72,8 @@ export async function createUser(
     delete data.display_id;
     if (data.password) {
       data.password = await bcrypt.hash(data.password, SALT_ROUNDS);
+    } else {
+      data.password = await bcrypt.hash("brgy418", SALT_ROUNDS);
     }
     const user = await prisma.user.create({
       data: {
