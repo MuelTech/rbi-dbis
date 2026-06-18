@@ -121,7 +121,7 @@ const ManageAccount: React.FC<ManageAccountProps> = ({ onShowSuccess, setIsNavig
         if (!formData.username.trim()) newErrors.username = 'Username is required';
         if (!formData.phoneNumber.trim()) newErrors.phoneNumber = 'Phone number is required';
         
-        if (!isEditing && !formData.password) {
+        if (!isEditing && !formData.password && !formData.mustChangePassword) {
             newErrors.password = 'Password is required';
         }
 
