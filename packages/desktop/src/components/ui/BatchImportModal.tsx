@@ -285,17 +285,32 @@ const BatchImportModal: React.FC<BatchImportModalProps> = ({
   }, [resetState, onClose]);
 
   const checkDuplicate = (row: Record<string, string>): boolean => {
-    return existingResidentsRef.current.some(
+    const rowDob = row.date_of_birth?.trim();
+    const result = existingResidentsRef.current.some(
       (r) =>
         r.lastName?.toLowerCase().trim() === row.last_name?.toLowerCase().trim() &&
         r.firstName?.toLowerCase().trim() === row.first_name?.toLowerCase().trim() &&
-        r.dateOfBirth === row.date_of_birth
+        r.dateOfBirth?.substring(0, 10) === rowDob?.substring(0, 10)
     );
+    if (!result && row.last_name) {
+      const match = existingResidentsRef.current.find(
+        (r) => r.lastName?.toLowerCase().trim() === row.last_name?.toLowerCase().trim() &&
+               r.firstName?.toLowerCase().trim() === row.first_name?.toLowerCase().trim()
+      );
+      if (match) {
+        console.log(`DUPLICATE DEBUG: Name matches but date mismatch for ${row.first_name} ${row.last_name}: DB="${match.dateOfBirth}" Excel="${rowDob}"`);
+      }
+    }
+    return result;
   };
 
   const processFile = useCallback(
     (file: File) => {
       setFileError('');
+      console.log(`IMPORT DEBUG: existingResidents count = ${existingResidentsRef.current.length}`);
+      if (existingResidentsRef.current.length > 0) {
+        console.log(`IMPORT DEBUG: First resident dateOfBirth = "${existingResidentsRef.current[0].dateOfBirth}"`);
+      }
 
       const ext = file.name.split('.').pop()?.toLowerCase();
       if (!ext || !['csv', 'xlsx', 'xls'].includes(ext)) {
