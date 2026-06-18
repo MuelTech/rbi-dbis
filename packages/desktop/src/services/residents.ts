@@ -34,6 +34,8 @@ export const residentsService = {
   update: (id: string, data: Record<string, unknown>) =>
     api.put<ResidentDetail>(`/residents/${id}`, data),
   delete: (id: string) => api.delete(`/residents/${id}`),
+  batchImport: (data: { families: any[]; duplicateAction: "skip" | "overwrite" }) =>
+    api.post<{ created: number; updated: number; skipped: number; families: number; errors: string[] }>("/residents/batch", data),
   register: (data: RegistrationPayload) =>
     api.post<RegistrationResult>("/resident-registrations", data),
 };
