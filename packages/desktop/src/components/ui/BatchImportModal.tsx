@@ -3,6 +3,7 @@ import { Upload, Download, FileText, Check, X, AlertTriangle, Users, ChevronLeft
 import * as XLSX from 'xlsx';
 import Modal from '@/components/ui/Modal';
 import { Resident } from '@/types';
+import { residentsService } from '@/services/residents';
 
 // --- Types ---
 
@@ -21,6 +22,16 @@ interface ImportResult {
   errors: number;
 }
 
+interface ImportFamily {
+  family_id: string;
+  household: Record<string, string>;
+  address: Record<string, string>;
+  pet: Record<string, string> | null;
+  vehicle: Record<string, string> | null;
+  head: Record<string, string>;
+  members: Record<string, string>[];
+}
+
 interface BatchImportModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -31,24 +42,41 @@ interface BatchImportModalProps {
 // --- Constants ---
 
 const TEMPLATE_COLUMNS = [
+  'family_id',
+  'relationship',
+  'block',
+  'household_number',
+  'house_number',
+  'street_name',
+  'alley',
+  'has_pets',
+  'number_of_dogs',
+  'number_of_cats',
+  'other_animals',
+  'has_vehicles',
+  'number_of_motorcycles',
+  'motorcycle_plate_numbers',
+  'number_of_other_vehicles',
+  'vehicle_plate_numbers',
   'last_name',
   'first_name',
   'middle_name',
   'suffix',
   'date_of_birth',
   'place_of_birth',
-  'sex',
   'civil_status',
-  'address',
+  'sex',
   'contact_number',
   'occupation',
+  'is_student',
+  'education_level',
   'is_voter',
+  'is_pwd',
+  'is_solo_parent',
   'is_owner',
-  'student_type',
-  'status_type',
 ];
 
-const REQUIRED_FIELDS = ['last_name', 'first_name', 'date_of_birth', 'sex'];
+const REQUIRED_FIELDS = ['family_id', 'relationship', 'last_name', 'first_name', 'date_of_birth', 'sex'];
 
 const MAX_ROWS = 500;
 
@@ -59,18 +87,22 @@ interface ValidationError {
   message: string;
 }
 
-function validateRow(row: Record<string, string>): ValidationError[] {
+function validateRow(row: Record<string, string>, isHead: boolean): ValidationError[] {
   const errors: ValidationError[] = [];
-
-  // 1. Required fields
   for (const field of REQUIRED_FIELDS) {
     if (!row[field] || row[field].toString().trim() === '') {
       errors.push({ field, message: `Missing required field: ${field}` });
     }
   }
-
-  // 2. Date format
-  if (row.date_of_birth && row.date_of_birth.toString().trim() !== '') {
+  if (isHead) {
+    const headRequired = ['block', 'household_number', 'house_number', 'street_name', 'alley'];
+    for (const field of headRequired) {
+      if (!row[field] || row[field].toString().trim() === '') {
+        errors.push({ field, message: `Missing required field for head: ${field}` });
+      }
+    }
+  }
+  if (row.date_of_birth && row.date_of_birth.trim() !== '') {
     const parsed = Date.parse(row.date_of_birth);
     if (isNaN(parsed)) {
       errors.push({ field: 'date_of_birth', message: 'Invalid date format' });
@@ -78,38 +110,52 @@ function validateRow(row: Record<string, string>): ValidationError[] {
       errors.push({ field: 'date_of_birth', message: 'Birthdate is in the future' });
     }
   }
-
-  // 3. Sex
   if (row.sex && !['male', 'female'].includes(row.sex.toLowerCase().trim())) {
     errors.push({ field: 'sex', message: 'Sex must be "Male" or "Female"' });
   }
-
-  // 4. Civil status
-  const validCivilStatus = ['single', 'married', 'widowed', 'separated', 'divorced'];
-  if (row.civil_status && row.civil_status.trim() !== '' && !validCivilStatus.includes(row.civil_status.toLowerCase().trim())) {
-    errors.push({ field: 'civil_status', message: 'Invalid civil status' });
-  }
-
-  // 5. Contact number — PH format
-  if (row.contact_number && row.contact_number.trim() !== '') {
-    const cleaned = row.contact_number.replace(/[\s\-()]/g, '');
-    if (!/^(09|\+639)\d{9}$/.test(cleaned)) {
-      errors.push({ field: 'contact_number', message: 'Invalid PH contact number' });
+  const yesNoFields = ['is_voter', 'is_pwd', 'is_solo_parent', 'is_owner', 'has_pets', 'has_vehicles'];
+  for (const field of yesNoFields) {
+    if (row[field] && row[field].trim() !== '' && !['yes', 'no'].includes(row[field].toLowerCase().trim())) {
+      errors.push({ field, message: 'Must be "Yes" or "No"' });
     }
   }
-
-  // 6. is_voter
-  if (row.is_voter && row.is_voter.trim() !== '' && !['yes', 'no'].includes(row.is_voter.toLowerCase().trim())) {
-    errors.push({ field: 'is_voter', message: 'Must be "Yes" or "No"' });
-  }
-
-  // 7. status_type
-  const validStatuses = ['active', 'deceased', 'move out'];
-  if (row.status_type && row.status_type.trim() !== '' && !validStatuses.includes(row.status_type.toLowerCase().trim())) {
-    errors.push({ field: 'status_type', message: 'Must be Active, Deceased, or Move out' });
-  }
-
   return errors;
+}
+
+// --- Grouping ---
+
+function parseGroupedRows(rows: Record<string, string>[]): ImportFamily[] {
+  const familyMap = new Map<string, ImportFamily>();
+  for (const row of rows) {
+    const familyId = (row.family_id || '').trim();
+    if (!familyId) continue;
+    if (!familyMap.has(familyId)) {
+      familyMap.set(familyId, {
+        family_id: familyId,
+        household: { block: row.block || '', household_number: row.household_number || '' },
+        address: { house_number: row.house_number || '', street_name: row.street_name || '', alley: row.alley || '' },
+        pet: null,
+        vehicle: null,
+        head: row,
+        members: [],
+      });
+    }
+    const family = familyMap.get(familyId)!;
+    if (row.relationship?.toLowerCase() === 'head') {
+      family.head = row;
+      family.household = { block: row.block || '', household_number: row.household_number || '' };
+      family.address = { house_number: row.house_number || '', street_name: row.street_name || '', alley: row.alley || '' };
+      if (row.has_pets === 'Yes' || row.has_pets === 'yes') {
+        family.pet = { has_pets: row.has_pets, number_of_dogs: row.number_of_dogs || '0', number_of_cats: row.number_of_cats || '0', other_animals: row.other_animals || '' };
+      }
+      if (row.has_vehicles === 'Yes' || row.has_vehicles === 'yes') {
+        family.vehicle = { has_vehicles: row.has_vehicles, number_of_motorcycles: row.number_of_motorcycles || '0', motorcycle_plate_numbers: row.motorcycle_plate_numbers || '', number_of_other_vehicles: row.number_of_other_vehicles || '0', vehicle_plate_numbers: row.vehicle_plate_numbers || '' };
+      }
+    } else {
+      family.members.push(row);
+    }
+  }
+  return Array.from(familyMap.values());
 }
 
 // --- Sub-components ---
@@ -209,12 +255,13 @@ const BatchImportModal: React.FC<BatchImportModalProps> = ({
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Computed counts
   const successCount = parsedRows.filter((r) => r.status === 'success').length;
   const duplicateCount = parsedRows.filter((r) => r.status === 'duplicate').length;
   const errorCount = parsedRows.filter((r) => r.status === 'error').length;
   const importableCount = successCount + (duplicateAction === 'overwrite' ? duplicateCount : 0);
   const totalRows = parsedRows.length;
+
+  const successFamilies = parseGroupedRows(parsedRows.filter((r) => r.status === 'success').map((r) => r.data));
 
   const resetState = useCallback(() => {
     setStep(1);
@@ -251,7 +298,6 @@ const BatchImportModal: React.FC<BatchImportModalProps> = ({
     (file: File) => {
       setFileError('');
 
-      // Validate file extension
       const ext = file.name.split('.').pop()?.toLowerCase();
       if (!ext || !['csv', 'xlsx', 'xls'].includes(ext)) {
         setFileError('Invalid file type. Please upload a .csv, .xlsx, or .xls file.');
@@ -268,19 +314,16 @@ const BatchImportModal: React.FC<BatchImportModalProps> = ({
           const sheet = workbook.Sheets[workbook.SheetNames[0]];
           const json: Record<string, string>[] = XLSX.utils.sheet_to_json(sheet, { defval: '' });
 
-          // Empty file check
           if (json.length === 0) {
             setFileError('The uploaded file has no data rows. Please add resident data below the header row.');
             return;
           }
 
-          // Large file cap
           if (json.length > MAX_ROWS) {
             setFileError(`File contains ${json.length} rows. Maximum allowed is ${MAX_ROWS} rows per import.`);
             return;
           }
 
-          // Normalize column headers to lowercase/trimmed
           const normalizedRows = json.map((row) => {
             const normalized: Record<string, string> = {};
             for (const key of Object.keys(row)) {
@@ -289,12 +332,12 @@ const BatchImportModal: React.FC<BatchImportModalProps> = ({
             return normalized;
           });
 
-          // Validate rows and check duplicates
           const importRows: ImportRow[] = normalizedRows.map((row, index) => {
-            const errors = validateRow(row);
+            const isHead = row.relationship?.toLowerCase() === 'head';
+            const errors = validateRow(row, isHead);
             if (errors.length > 0) {
               return {
-                rowNumber: index + 2, // +2 because row 1 is header, data starts at 2
+                rowNumber: index + 2,
                 data: row,
                 status: 'error' as ImportRowStatus,
                 message: errors.map((e) => e.message).join('; '),
@@ -366,27 +409,24 @@ const BatchImportModal: React.FC<BatchImportModalProps> = ({
     XLSX.writeFile(wb, 'resident_import_template.xlsx');
   }, []);
 
-  const handleImport = useCallback(() => {
+  const handleImport = useCallback(async () => {
     setImporting(true);
-
-    // Simulate import processing
-    setTimeout(() => {
-      const successRows = parsedRows.filter((r) => r.status === 'success').length;
-      const dupRows = parsedRows.filter((r) => r.status === 'duplicate').length;
-      const errRows = parsedRows.filter((r) => r.status === 'error').length;
-
-      const imported = successRows + (duplicateAction === 'overwrite' ? dupRows : 0);
-      const skippedOrOverwritten = duplicateAction === 'skip' ? dupRows : 0;
-
+    try {
+      const successRows = parsedRows.filter(r => r.status === 'success').map(r => r.data);
+      const families = parseGroupedRows(successRows);
+      const result = await residentsService.batchImport({ families, duplicateAction });
       setImportResult({
-        success: imported,
-        duplicates: skippedOrOverwritten,
-        errors: errRows,
+        success: result.created,
+        duplicates: result.skipped,
+        errors: result.errors.length,
       });
-
       setImporting(false);
       setStep(3);
-    }, 1200);
+    } catch (err: any) {
+      setImportResult({ success: 0, duplicates: 0, errors: 1 });
+      setImporting(false);
+      setStep(3);
+    }
   }, [parsedRows, duplicateAction]);
 
   const handleDone = useCallback(() => {
@@ -399,7 +439,6 @@ const BatchImportModal: React.FC<BatchImportModalProps> = ({
 
   const renderStep1 = () => (
     <div className="flex flex-col items-center py-4">
-      {/* Drop zone */}
       <div
         onClick={() => fileInputRef.current?.click()}
         onDrop={handleDrop}
@@ -424,7 +463,6 @@ const BatchImportModal: React.FC<BatchImportModalProps> = ({
         className="hidden"
       />
 
-      {/* File error */}
       {fileError && (
         <div className="mt-4 flex items-center gap-2 text-red-500 text-[13px] font-medium">
           <AlertTriangle className="w-4 h-4" />
@@ -432,7 +470,6 @@ const BatchImportModal: React.FC<BatchImportModalProps> = ({
         </div>
       )}
 
-      {/* Template download */}
       <div className="mt-6">
         <button
           onClick={handleDownloadTemplate}
@@ -447,7 +484,6 @@ const BatchImportModal: React.FC<BatchImportModalProps> = ({
 
   const renderStep2 = () => (
     <div className="flex flex-col gap-4">
-      {/* Summary stat cards */}
       <div className="grid grid-cols-3 gap-4">
         <div className="bg-[#F0FDF4] border border-green-200 rounded-2xl p-4 text-center">
           <div className="text-2xl font-bold text-[#166534]">{successCount}</div>
@@ -463,7 +499,6 @@ const BatchImportModal: React.FC<BatchImportModalProps> = ({
         </div>
       </div>
 
-      {/* Duplicate handling */}
       {duplicateCount > 0 && (
         <div className="bg-[#FFFBEB] border border-orange-200 rounded-2xl p-4 flex items-center gap-4">
           <span className="text-[13px] font-bold text-[#9A3412]">Duplicate handling:</span>
@@ -518,37 +553,45 @@ const BatchImportModal: React.FC<BatchImportModalProps> = ({
         </div>
       )}
 
-      {/* Data table */}
       <div className="border border-gray-100 rounded-2xl overflow-hidden">
         <div className="overflow-auto max-h-[35vh]">
           <table className="w-full border-separate border-spacing-0">
             <thead className="bg-gray-50/50 border-b border-gray-100 sticky top-0 z-10">
               <tr>
-                <th className="text-left py-3 px-4 text-[13px] font-bold text-blue-500 whitespace-nowrap">Row</th>
-                <th className="text-left py-3 px-4 text-[13px] font-bold text-blue-500 whitespace-nowrap">Last Name</th>
-                <th className="text-left py-3 px-4 text-[13px] font-bold text-blue-500 whitespace-nowrap">First Name</th>
-                <th className="text-left py-3 px-4 text-[13px] font-bold text-blue-500 whitespace-nowrap">Birthdate</th>
-                <th className="text-left py-3 px-4 text-[13px] font-bold text-blue-500 whitespace-nowrap">Sex</th>
+                <th className="text-left py-3 px-4 text-[13px] font-bold text-blue-500 whitespace-nowrap">Family ID</th>
+                <th className="text-left py-3 px-4 text-[13px] font-bold text-blue-500 whitespace-nowrap">Head Name</th>
+                <th className="text-left py-3 px-4 text-[13px] font-bold text-blue-500 whitespace-nowrap">Members</th>
                 <th className="text-left py-3 px-4 text-[13px] font-bold text-blue-500 whitespace-nowrap">Status</th>
                 <th className="text-left py-3 px-4 text-[13px] font-bold text-blue-500 whitespace-nowrap">Message</th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-50">
-              {parsedRows.map((row) => (
-                <tr key={row.rowNumber} className="hover:bg-gray-50/50 transition-colors">
-                  <td className="px-4 py-3 text-[14px] font-bold text-gray-900">{row.rowNumber}</td>
-                  <td className="px-4 py-3 text-[14px] text-gray-700 font-medium">{row.data.last_name}</td>
-                  <td className="px-4 py-3 text-[14px] text-gray-700 font-medium">{row.data.first_name}</td>
-                  <td className="px-4 py-3 text-[14px] text-gray-700 font-medium">{row.data.date_of_birth}</td>
-                  <td className="px-4 py-3 text-[14px] text-gray-700 font-medium">{row.data.sex}</td>
-                  <td className="px-4 py-3">
-                    <StatusBadge status={row.status} />
-                  </td>
-                  <td className="px-4 py-3 text-[12px] text-gray-500 font-medium max-w-[200px] truncate">
-                    {row.message}
-                  </td>
-                </tr>
-              ))}
+              {successFamilies.map((family) => {
+                const headRow = parsedRows.find(
+                  (r) => r.data.family_id === family.family_id && r.data.relationship?.toLowerCase() === 'head'
+                );
+                const allRowsForFamily = parsedRows.filter((r) => r.data.family_id === family.family_id);
+                const hasError = allRowsForFamily.some((r) => r.status === 'error');
+                const firstError = allRowsForFamily.find((r) => r.status === 'error');
+                const familyStatus: ImportRowStatus = hasError ? 'error' : 'success';
+                const familyMessage = hasError && firstError ? firstError.message : '';
+
+                return (
+                  <tr key={family.family_id} className="hover:bg-gray-50/50 transition-colors">
+                    <td className="px-4 py-3 text-[14px] font-bold text-gray-900">{family.family_id}</td>
+                    <td className="px-4 py-3 text-[14px] text-gray-700 font-medium">
+                      {family.head.first_name} {family.head.last_name}
+                    </td>
+                    <td className="px-4 py-3 text-[14px] text-gray-700 font-medium">{family.members.length}</td>
+                    <td className="px-4 py-3">
+                      <StatusBadge status={familyStatus} />
+                    </td>
+                    <td className="px-4 py-3 text-[12px] text-gray-500 font-medium max-w-[200px] truncate">
+                      {familyMessage}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -558,13 +601,11 @@ const BatchImportModal: React.FC<BatchImportModalProps> = ({
 
   const renderStep3 = () => (
     <div className="flex flex-col items-center py-6">
-      {/* Success icon */}
       <div className="w-16 h-16 rounded-full bg-[#F0FDF4] border-2 border-green-300 flex items-center justify-center mx-auto mb-4">
         <Check className="w-8 h-8 text-[#166534]" />
       </div>
       <h3 className="text-xl font-bold text-gray-900 text-center">Import Complete!</h3>
 
-      {/* Result stat cards */}
       <div className="grid grid-cols-3 gap-4 mt-6 w-full max-w-md mx-auto">
         <div className="bg-[#F0FDF4] border border-green-200 rounded-2xl p-4 text-center">
           <div className="text-2xl font-bold text-[#166534]">{importResult.success}</div>
@@ -582,7 +623,6 @@ const BatchImportModal: React.FC<BatchImportModalProps> = ({
         </div>
       </div>
 
-      {/* File info */}
       <p className="text-[13px] text-gray-500 font-medium text-center mt-4">
         {fileName} — {totalRows} rows processed
       </p>
@@ -593,7 +633,6 @@ const BatchImportModal: React.FC<BatchImportModalProps> = ({
 
   const renderFooter = () => (
     <div className="flex items-center justify-between px-6 py-4 border-t border-gray-100 shrink-0 bg-white rounded-b-2xl">
-      {/* Left side */}
       <div>
         {step === 2 && (
           <button
@@ -612,9 +651,7 @@ const BatchImportModal: React.FC<BatchImportModalProps> = ({
         )}
       </div>
 
-      {/* Right side */}
       <div className="flex items-center gap-3">
-        {/* Cancel — Steps 1 & 2 */}
         {(step === 1 || step === 2) && (
           <button
             onClick={handleClose}
@@ -624,7 +661,6 @@ const BatchImportModal: React.FC<BatchImportModalProps> = ({
           </button>
         )}
 
-        {/* Import — Step 2 */}
         {step === 2 && (
           <button
             onClick={handleImport}
@@ -648,7 +684,6 @@ const BatchImportModal: React.FC<BatchImportModalProps> = ({
           </button>
         )}
 
-        {/* Done — Step 3 */}
         {step === 3 && (
           <button
             onClick={handleDone}
@@ -664,7 +699,6 @@ const BatchImportModal: React.FC<BatchImportModalProps> = ({
 
   return (
     <Modal isOpen={isOpen} onClose={handleClose} title="Batch Import Residents" maxWidth="max-w-4xl" disableScroll={true}>
-      {/* Body */}
       <div className="flex-1 overflow-y-auto p-6 custom-scrollbar">
         <StepIndicator currentStep={step} />
         {step === 1 && renderStep1()}
@@ -672,7 +706,6 @@ const BatchImportModal: React.FC<BatchImportModalProps> = ({
         {step === 3 && renderStep3()}
       </div>
 
-      {/* Footer — pinned outside scroll area */}
       {renderFooter()}
     </Modal>
   );
