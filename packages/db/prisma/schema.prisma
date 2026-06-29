@@ -295,7 +295,7 @@ model BarangayOfficial {
   @@map("barangay_officials")
 }
 
-// ─── AuditTrail (replaces ActivityLog) ───────────────────────────────────────
+// ─── AuditTrail (JSON Delta approach) ──────────────────────────────────────
 
 model AuditTrail {
   id         String   @id @default(cuid())
@@ -303,9 +303,8 @@ model AuditTrail {
   recordId   String   @map("record_id")
   actionType String   @map("action_type") @db.VarChar(50)
   timestamp  DateTime @default(now())
-  fieldName  String?  @map("field_name") @db.VarChar(50)
-  oldValue   String?  @map("old_value") @db.Text
-  newValue   String?  @map("new_value") @db.Text
+  changes    Json?    @db.Json
+  summary    String?  @db.VarChar(255)
 
   userId     String   @map("user_id")
   user       User     @relation(fields: [userId], references: [id])

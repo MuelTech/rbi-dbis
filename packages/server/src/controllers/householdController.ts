@@ -1,6 +1,7 @@
 import type { Request, Response, NextFunction } from "express";
 import { prisma } from "@rbi/db";
 import type { Prisma } from "@rbi/db";
+import { logCreate, logUpdate, logArchive } from "../services/auditService.js";
 
 export async function getHouseholds(
   req: Request,
@@ -218,10 +219,18 @@ export async function createHousehold(
   next: NextFunction
 ) {
   try {
+    const userId = req.user?.id;
     const data = { ...req.body };
     delete data.displayId;
     delete data.display_id;
     const household = await prisma.household.create({ data });
+
+    if (userId) {
+      await logCreate("households", household.id, userId, {
+        brgyHouseholdNo: household.brgyHouseholdNo,
+      });
+    }
+
     res.status(201).json(household);
   } catch (err) {
     next(err);
@@ -234,13 +243,22 @@ export async function updateHousehold(
   next: NextFunction
 ) {
   try {
+    const userId = req.user?.id;
+    const id = req.params.id as string;
+    const oldHousehold = await prisma.household.findUnique({ where: { id } });
+
     const data = { ...req.body };
     delete data.displayId;
     delete data.display_id;
     const household = await prisma.household.update({
-      where: { id: req.params.id },
+      where: { id },
       data,
     });
+
+    if (userId && oldHousehold) {
+      await logUpdate("households", id, userId, { brgyHouseholdNo: oldHousehold.brgyHouseholdNo }, { brgyHouseholdNo: household.brgyHouseholdNo });
+    }
+
     res.json(household);
   } catch (err) {
     next(err);
@@ -253,7 +271,14 @@ export async function deleteHousehold(
   next: NextFunction
 ) {
   try {
-    await prisma.household.delete({ where: { id: req.params.id } });
+    const id = req.params.id as string;
+    const userId = req.user?.id;
+
+    if (userId) {
+      await logArchive("households", id, userId);
+    }
+
+    await prisma.household.delete({ where: { id } });
     res.status(204).end();
   } catch (err) {
     next(err);

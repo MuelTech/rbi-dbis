@@ -1,6 +1,7 @@
 import type { Request, Response, NextFunction } from "express";
 import bcrypt from "bcryptjs";
 import { prisma } from "@rbi/db";
+import { logCreate, logUpdate } from "../services/auditService.js";
 
 const SALT_ROUNDS = 10;
 
@@ -68,6 +69,7 @@ export async function createUser(
 ) {
   try {
     const { data, userInfoFields } = extractUserInfoFields(req.body);
+    const authUserId = req.user?.id;
     delete data.displayId;
     delete data.display_id;
     if (data.password) {
@@ -83,6 +85,14 @@ export async function createUser(
       omit: { password: true },
       include: { userInfo: true },
     });
+
+    if (authUserId) {
+      await logCreate("users", user.id, authUserId, {
+        username: user.username,
+        roleType: user.roleType,
+      });
+    }
+
     res.status(201).json(user);
   } catch (err) {
     next(err);
@@ -96,6 +106,13 @@ export async function updateUser(
 ) {
   try {
     const id = req.params.id as string;
+    const authUserId = req.user?.id;
+
+    const oldUser = await prisma.user.findUnique({
+      where: { id },
+      include: { userInfo: true },
+    });
+
     const { data, userInfoFields } = extractUserInfoFields(req.body);
     delete data.displayId;
     delete data.display_id;
@@ -121,6 +138,25 @@ export async function updateUser(
       omit: { password: true },
       include: { userInfo: true },
     });
+
+    if (authUserId && oldUser) {
+      const oldData = {
+        username: oldUser.username,
+        roleType: oldUser.roleType,
+        isActive: oldUser.isActive,
+        firstName: oldUser.userInfo?.firstName,
+        lastName: oldUser.userInfo?.lastName,
+      };
+      const updatedData = {
+        username: user.username,
+        roleType: user.roleType,
+        isActive: user.isActive,
+        firstName: user.userInfo?.firstName,
+        lastName: user.userInfo?.lastName,
+      };
+      await logUpdate("users", id, authUserId, oldData, updatedData);
+    }
+
     res.json(user);
   } catch (err) {
     next(err);

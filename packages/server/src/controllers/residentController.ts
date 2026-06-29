@@ -1,5 +1,6 @@
 import type { Request, Response, NextFunction } from "express";
 import { prisma, Prisma } from "@rbi/db";
+import { logCreate, logUpdate, logArchive } from "../services/auditService.js";
 
 const STATUS_MAP_TO_DB: Record<string, string> = {
   Active: "Alive",
@@ -216,9 +217,8 @@ async function buildResidentDetail(id: string) {
       ? `${a.user.userInfo.firstName} ${a.user.userInfo.lastName}`
       : a.user?.username ?? "",
     actionType: a.actionType,
-    fieldName: a.fieldName,
-    oldValue: a.oldValue,
-    newValue: a.newValue,
+    changes: a.changes,
+    summary: a.summary,
   }));
 
   return {
@@ -273,11 +273,21 @@ export async function createResident(
   next: NextFunction
 ) {
   try {
+    const userId = req.user?.id;
     const data = { ...req.body };
     delete data.displayId;
     delete data.display_id;
     if (data.dateOfBirth) data.dateOfBirth = new Date(data.dateOfBirth);
     const resident = await prisma.resident.create({ data });
+
+    if (userId) {
+      await logCreate("residents", resident.id, userId, {
+        firstName: resident.firstName,
+        lastName: resident.lastName,
+        sex: resident.sex,
+      });
+    }
+
     res.status(201).json(resident);
   } catch (err) {
     next(err);
@@ -292,6 +302,10 @@ export async function updateResident(
   try {
     const id = req.params.id as string;
     const body = req.body;
+    const userId = req.user?.id;
+
+    const oldResident = await prisma.resident.findUnique({ where: { id } });
+    if (!oldResident) return res.status(404).json({ error: "Resident not found" });
 
     const dbData: Record<string, unknown> = {};
 
@@ -321,6 +335,37 @@ export async function updateResident(
 
     await prisma.resident.update({ where: { id }, data: dbData });
 
+    if (userId) {
+      const newData = await prisma.resident.findUnique({ where: { id } });
+      if (newData) {
+        const oldData = {
+          firstName: oldResident.firstName,
+          lastName: oldResident.lastName,
+          middleName: oldResident.middleName,
+          sex: oldResident.sex,
+          civilStatus: oldResident.civilStatus,
+          isVoter: oldResident.isVoter,
+          isPwd: oldResident.isPwd,
+          contactNumber: oldResident.contactNumber,
+          occupationType: oldResident.occupationType,
+          statusType: oldResident.statusType,
+        };
+        const updatedData = {
+          firstName: newData.firstName,
+          lastName: newData.lastName,
+          middleName: newData.middleName,
+          sex: newData.sex,
+          civilStatus: newData.civilStatus,
+          isVoter: newData.isVoter,
+          isPwd: newData.isPwd,
+          contactNumber: newData.contactNumber,
+          occupationType: newData.occupationType,
+          statusType: newData.statusType,
+        };
+        await logUpdate("residents", id, userId, oldData, updatedData);
+      }
+    }
+
     const detail = await buildResidentDetail(id);
     if (!detail) return res.status(404).json({ error: "Resident not found" });
     res.json(detail);
@@ -336,6 +381,12 @@ export async function deleteResident(
 ) {
   try {
     const id = req.params.id as string;
+    const userId = req.user?.id;
+
+    if (userId) {
+      await logArchive("residents", id, userId);
+    }
+
     await prisma.resident.delete({ where: { id } });
     res.status(204).end();
   } catch (err) {

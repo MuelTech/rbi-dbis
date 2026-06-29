@@ -1,5 +1,6 @@
 import type { Request, Response, NextFunction } from "express";
 import { prisma } from "@rbi/db";
+import { logCreate } from "../services/auditService.js";
 
 export async function registerFamily(
   req: Request,
@@ -159,6 +160,14 @@ export async function registerFamily(
         memberCount: members.length,
       };
     });
+
+    const userId = req.user?.id;
+    if (userId) {
+      await logCreate("families", result.familyDisplayId.toString(), userId, {
+        familyName: head.lastName,
+        householdNo: household.brgyHouseholdNo,
+      });
+    }
 
     res.status(201).json(result);
   } catch (err: any) {

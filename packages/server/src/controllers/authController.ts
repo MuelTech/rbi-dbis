@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import type { StringValue } from "ms";
 import { prisma } from "@rbi/db";
+import { logAction } from "../services/auditService.js";
 
 const JWT_SECRET = process.env.JWT_SECRET ?? "dev-jwt-secret-change-me";
 const JWT_EXPIRES_IN = (process.env.JWT_EXPIRES_IN ?? "8h") as StringValue;
@@ -40,6 +41,8 @@ export async function login(req: Request, res: Response, next: NextFunction) {
       where: { id: user.id },
       data: { lastLogin: new Date() },
     });
+
+    await logAction("users", user.id, user.id, "LOGIN", null, `User ${username} logged in`);
 
     const token = jwt.sign(
       { sub: user.id, username: user.username },
@@ -128,6 +131,8 @@ export async function changePassword(
         mustChangePassword: false,
       },
     });
+
+    await logAction("users", authUser.id, authUser.id, "UPDATE", null, "Changed password");
 
     res.json({ success: true });
   } catch (err) {

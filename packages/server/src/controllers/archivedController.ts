@@ -1,5 +1,6 @@
 import type { Request, Response, NextFunction } from "express";
 import { prisma } from "@rbi/db";
+import { logAction } from "../services/auditService.js";
 
 export async function getArchivedFamilies(
   req: Request,
@@ -82,6 +83,7 @@ export async function restoreFamily(
 ) {
   try {
     const familyId = req.params.familyId as string;
+    const userId = req.user?.id;
 
     const family = await prisma.family.findUnique({
       where: { id: familyId },
@@ -100,6 +102,10 @@ export async function restoreFamily(
       where: { id: familyId },
       data: { isArchived: false },
     });
+
+    if (userId) {
+      await logAction("families", familyId, userId, "RESTORE", null, "Restored archived family");
+    }
 
     res.json({ message: "Family restored successfully" });
   } catch (err) {

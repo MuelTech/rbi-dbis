@@ -1,5 +1,6 @@
 import type { Request, Response, NextFunction } from "express";
 import { prisma, Sex } from "@rbi/db";
+import { logCreate, logUpdate, logArchive, logAction } from "../services/auditService.js";
 
 function computeAge(dateOfBirth: Date | null): number {
   if (!dateOfBirth) return 0;
@@ -148,23 +149,25 @@ export async function updateFamily(
       }
 
       if (pet) {
+        const numCats = Number(pet.numberOfCats) || 0;
+        const numDogs = Number(pet.numberOfDogs) || 0;
         const hasPetData =
-          pet.numberOfCats > 0 || pet.numberOfDogs > 0 || (pet.others && pet.others.trim() !== "");
+          numCats > 0 || numDogs > 0 || (pet.others && pet.others.trim() !== "");
 
         await tx.familyPet.upsert({
           where: { familyId },
           create: {
             familyId,
-            isPetOwner: hasPetData,
-            numberOfCats: pet.numberOfCats ?? 0,
-            numberOfDogs: pet.numberOfDogs ?? 0,
-            others: pet.others ?? null,
+            isPetOwner: Boolean(hasPetData),
+            numberOfCats: numCats,
+            numberOfDogs: numDogs,
+            others: pet.others || null,
           },
           update: {
-            isPetOwner: hasPetData,
-            numberOfCats: pet.numberOfCats ?? 0,
-            numberOfDogs: pet.numberOfDogs ?? 0,
-            others: pet.others ?? null,
+            isPetOwner: Boolean(hasPetData),
+            numberOfCats: numCats,
+            numberOfDogs: numDogs,
+            others: pet.others || null,
           },
         });
       }
@@ -174,20 +177,29 @@ export async function updateFamily(
           where: { familyId },
           create: {
             familyId,
-            numberOfMotorcycles: vehicle.numberOfMotorcycles ?? 0,
-            motorcyclePlateNumber: vehicle.motorcyclePlateNumber ?? null,
-            numberOfVehicles: vehicle.numberOfVehicles ?? 0,
-            vehiclePlateNumber: vehicle.vehiclePlateNumber ?? null,
+            numberOfMotorcycles: Number(vehicle.numberOfMotorcycles) || 0,
+            motorcyclePlateNumber: vehicle.motorcyclePlateNumber || null,
+            numberOfVehicles: Number(vehicle.numberOfVehicles) || 0,
+            vehiclePlateNumber: vehicle.vehiclePlateNumber || null,
           },
           update: {
-            numberOfMotorcycles: vehicle.numberOfMotorcycles ?? 0,
-            motorcyclePlateNumber: vehicle.motorcyclePlateNumber ?? null,
-            numberOfVehicles: vehicle.numberOfVehicles ?? 0,
-            vehiclePlateNumber: vehicle.vehiclePlateNumber ?? null,
+            numberOfMotorcycles: Number(vehicle.numberOfMotorcycles) || 0,
+            motorcyclePlateNumber: vehicle.motorcyclePlateNumber || null,
+            numberOfVehicles: Number(vehicle.numberOfVehicles) || 0,
+            vehiclePlateNumber: vehicle.vehiclePlateNumber || null,
           },
         });
       }
     });
+
+    const userId = req.user?.id;
+    if (userId) {
+      const changedFields: string[] = [];
+      if (req.body.address) changedFields.push("address");
+      if (req.body.pet) changedFields.push("pet");
+      if (req.body.vehicle) changedFields.push("vehicle");
+      await logAction("families", familyId, userId, "UPDATE", null, `Updated family: ${changedFields.join(", ")}`);
+    }
 
     const detail = await buildFamilyDetail(familyId);
     res.json(detail);
@@ -203,6 +215,7 @@ export async function archiveFamily(
 ) {
   try {
     const familyId = req.params.familyId as string;
+    const userId = req.user?.id;
 
     const family = await prisma.family.findUnique({
       where: { id: familyId },
@@ -241,6 +254,10 @@ export async function archiveFamily(
         data: { isArchived: true },
       });
     });
+
+    if (userId) {
+      await logArchive("families", familyId, userId);
+    }
 
     res.json({ message: "Family archived successfully" });
   } catch (err) {
@@ -340,6 +357,16 @@ export async function addFamilyMember(
 
       return member;
     });
+
+    const userId = req.user?.id;
+    if (userId) {
+      await logCreate("families", familyId, userId, {
+        action: "Added member",
+        firstName: result.resident.firstName,
+        lastName: result.resident.lastName,
+        relationshipType: result.relationshipType,
+      });
+    }
 
     const r = result.resident;
     res.status(201).json({
@@ -444,6 +471,11 @@ export async function reassignHead(
         data: { headPersonId: newHeadResidentId },
       });
     });
+
+    const userId = req.user?.id;
+    if (userId) {
+      await logUpdate("families", familyId, userId, { headPersonId: oldHeadId }, { headPersonId: newHeadResidentId });
+    }
 
     const detail = await buildFamilyDetail(familyId);
     res.json(detail);

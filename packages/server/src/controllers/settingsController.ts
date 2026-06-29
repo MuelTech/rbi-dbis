@@ -1,5 +1,6 @@
 import type { Request, Response, NextFunction } from "express";
 import { prisma, Prisma } from "@rbi/db";
+import { logAction } from "../services/auditService.js";
 
 const DEFAULT_SETTINGS = {
   slogan: "Serbisyong Tapat, Para sa Lahat",
@@ -57,6 +58,7 @@ export async function updateSettings(
   next: NextFunction
 ) {
   try {
+    const userId = req.user?.id;
     let setting = await prisma.barangaySetting.findFirst();
     if (setting) {
       await prisma.barangaySetting.update({
@@ -68,6 +70,11 @@ export async function updateSettings(
         data: { data: req.body },
       });
     }
+
+    if (userId) {
+      await logAction("settings", "1", userId, "UPDATE", null, "Updated barangay settings");
+    }
+
     res.json(req.body);
   } catch (err) {
     next(err);
@@ -324,6 +331,11 @@ export async function restoreData(
         await tx.barangaySetting.create({ data: { data: data.settings } });
       }
     });
+
+    const userId = req.user?.id;
+    if (userId) {
+      await logAction("settings", "1", userId, "RESTORE", null, "Restored data from backup");
+    }
 
     res.json({ success: true, message: "Data restored successfully" });
   } catch (err: any) {

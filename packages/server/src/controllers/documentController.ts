@@ -1,5 +1,6 @@
 import type { Request, Response, NextFunction } from "express";
 import { prisma } from "@rbi/db";
+import { logCreate } from "../services/auditService.js";
 
 export async function getDocuments(
   _req: Request,
@@ -41,10 +42,19 @@ export async function createDocument(
   next: NextFunction
 ) {
   try {
+    const userId = req.user?.id;
     const data = { ...req.body };
     delete data.displayId;
     delete data.display_id;
     const document = await prisma.document.create({ data });
+
+    if (userId) {
+      await logCreate("documents", document.id, userId, {
+        issueDate: document.issueDate,
+        purpose: document.purpose,
+      });
+    }
+
     res.status(201).json(document);
   } catch (err) {
     next(err);
