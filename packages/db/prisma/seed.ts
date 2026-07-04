@@ -57,6 +57,37 @@ async function main() {
     console.log(`  Upserted user: ${u.username} (displayId: ${user.displayId})`);
   }
 
+  console.log("\nSeeding document types...");
+
+  const documentTypes = [
+    { documentName: "Barangay Business Clearance", amount: 500 },
+    { documentName: "Business Permit", amount: 500 },
+    { documentName: "Certificate of Indigency", amount: 0 },
+    { documentName: "Barangay Clearance", amount: 200 },
+    { documentName: "Certificate of Residency", amount: 150 },
+  ];
+
+  for (const dt of documentTypes) {
+    const existing = await prisma.documentType.findFirst({
+      where: { documentName: dt.documentName },
+    });
+
+    if (existing) {
+      await prisma.documentType.update({
+        where: { id: existing.id },
+        data: { amount: dt.amount },
+      });
+    } else {
+      await prisma.documentType.create({
+        data: {
+          documentName: dt.documentName,
+          amount: dt.amount,
+        },
+      });
+    }
+    console.log(`  Upserted document type: ${dt.documentName}`);
+  }
+
   console.log("\nSeed complete.");
   console.log(`QA account -> username: ${QA_USERNAME}  password: ${QA_PASSWORD}`);
 }
