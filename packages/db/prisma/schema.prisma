@@ -218,6 +218,7 @@ model UserInfo {
 model Order {
   id         String   @id @default(cuid())
   displayId  Int      @unique @default(autoincrement()) @map("display_id")
+  orNumber   String   @unique @map("or_number") @db.VarChar(20)
   orderDate  DateTime @map("order_date")
   amount     Decimal  @default(0) @db.Decimal(10, 2)
   createdAt  DateTime @default(now()) @map("created_at")
@@ -239,6 +240,7 @@ model Order {
 model Document {
   id             String   @id @default(cuid())
   displayId      Int      @unique @default(autoincrement()) @map("display_id")
+  documentNumber String   @unique @map("document_number") @db.VarChar(20)
   issueDate      DateTime @map("issue_date") @db.Date
   purpose        String?  @db.VarChar(255)
   validityPeriod String?  @map("validity_period") @db.VarChar(50)
