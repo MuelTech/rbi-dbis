@@ -43,19 +43,100 @@ export async function createDocument(
 ) {
   try {
     const userId = req.user?.id;
-    const data = { ...req.body };
-    delete data.displayId;
-    delete data.display_id;
-    const document = await prisma.document.create({ data });
+    const { residentId, documentTypeId, purpose, validityPeriod } = req.body;
 
+    // Validate required fields
+    if (!residentId || !documentTypeId) {
+      return res
+        .status(400)
+        .json({ error: "residentId and documentTypeId are required" });
+    }
+
+    // Verify document type exists
+    const documentType = await prisma.documentType.findUnique({
+      where: { id: documentTypeId },
+    });
+    if (!documentType) {
+      return res.status(404).json({ error: "Document type not found" });
+    }
+
+    // Generate unique OR number: YYYY-418-XXXXX
+    const currentYear = new Date().getFullYear();
+    const lastOrder = await prisma.order.findFirst({
+      orderBy: { createdAt: "desc" },
+      select: { orNumber: true },
+    });
+
+    let orSequence = 1;
+    if (lastOrder) {
+      const parts = lastOrder.orNumber.split("-");
+      if (parts.length === 3 && parts[0] === String(currentYear)) {
+        orSequence = parseInt(parts[2], 10) + 1;
+      }
+    }
+    const orNumber = `${currentYear}-418-${String(orSequence).padStart(5, "0")}`;
+
+    // Generate unique document number: DOC-XXXXX
+    const lastDocument = await prisma.document.findFirst({
+      orderBy: { createdAt: "desc" },
+      select: { documentNumber: true },
+    });
+
+    let docSequence = 1;
+    if (lastDocument) {
+      const match = lastDocument.documentNumber.match(/DOC-(\d+)/);
+      if (match) {
+        docSequence = parseInt(match[1], 10) + 1;
+      }
+    }
+    const documentNumber = `DOC-${String(docSequence).padStart(5, "0")}`;
+
+    // Create Document and Order in a transaction
+    const result = await prisma.$transaction(async (tx) => {
+      const document = await tx.document.create({
+        data: {
+          documentNumber,
+          issueDate: new Date(),
+          purpose: purpose || null,
+          validityPeriod: validityPeriod || null,
+          documentTypeId,
+        },
+      });
+
+      const order = await tx.order.create({
+        data: {
+          orNumber,
+          orderDate: new Date(),
+          amount: documentType.amount,
+          userId: userId!,
+          residentId,
+          documentId: document.id,
+        },
+      });
+
+      return { document, order };
+    });
+
+    // Log the creation
     if (userId) {
-      await logCreate("documents", document.id, userId, {
-        issueDate: document.issueDate,
-        purpose: document.purpose,
+      await logCreate("documents", result.document.id, userId, {
+        documentNumber: result.document.documentNumber,
+        purpose: result.document.purpose,
+        orNumber: result.order.orNumber,
       });
     }
 
-    res.status(201).json(document);
+    // Return full document with relations
+    const fullDocument = await prisma.document.findUnique({
+      where: { id: result.document.id },
+      include: {
+        documentType: true,
+        order: true,
+        signers: true,
+      },
+    });
+
+    res.status(201).json(fullDocument);
   } catch (err) {
     next(err);
   }
