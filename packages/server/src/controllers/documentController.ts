@@ -2,6 +2,21 @@ import type { Request, Response, NextFunction } from "express";
 import { prisma } from "@rbi/db";
 import { logCreate } from "../services/auditService.js";
 
+export async function getDocumentTypes(
+  _req: Request,
+  res: Response,
+  next: NextFunction
+) {
+  try {
+    const types = await prisma.documentType.findMany({
+      orderBy: { documentName: "asc" },
+    });
+    res.json(types);
+  } catch (err) {
+    next(err);
+  }
+}
+
 export async function getDocuments(
   _req: Request,
   res: Response,
@@ -9,7 +24,14 @@ export async function getDocuments(
 ) {
   try {
     const documents = await prisma.document.findMany({
-      include: { resident: true },
+      include: {
+        documentType: true,
+        order: {
+          include: {
+            resident: true,
+          },
+        },
+      },
       orderBy: { createdAt: "desc" },
     });
     res.json(documents);
@@ -24,9 +46,18 @@ export async function getDocumentById(
   next: NextFunction
 ) {
   try {
+    const id = req.params.id as string;
     const document = await prisma.document.findUnique({
-      where: { id: req.params.id },
-      include: { resident: true },
+      where: { id },
+      include: {
+        documentType: true,
+        order: {
+          include: {
+            resident: true,
+          },
+        },
+        signers: true,
+      },
     });
     if (!document)
       return res.status(404).json({ error: "Document not found" });
