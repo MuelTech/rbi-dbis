@@ -90,15 +90,15 @@ const BusinessClearanceTemplate: React.FC<{ data: any }> = ({ data }) => {
       <div className="mt-24 text-[9pt] font-mono text-gray-600">
         <div className="grid grid-cols-[100px_1fr] gap-1">
           <span>OR Number:</span>
-          <span>1234567</span>
+          <span>{data.orNumber || 'N/A'}</span>
+        </div>
+        <div className="grid grid-cols-[100px_1fr] gap-1">
+          <span>Doc Number:</span>
+          <span>{data.documentNumber || 'N/A'}</span>
         </div>
         <div className="grid grid-cols-[100px_1fr] gap-1">
           <span>Amount Paid:</span>
-          <span>₱ {amountPaid}.00</span>
-        </div>
-        <div className="grid grid-cols-[100px_1fr] gap-1">
-          <span>Date Issued:</span>
-          <span>January 4, 2026</span>
+          <span>₱ {amountPaid || '0'}.00</span>
         </div>
       </div>
 
