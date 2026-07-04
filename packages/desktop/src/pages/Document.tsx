@@ -27,6 +27,17 @@ const Document: React.FC<DocumentProps> = ({ setIsNavigationBlocked }) => {
   const [activeConfig, setActiveConfig] = useState<DocumentConfig | null>(null);
   const [formData, setFormData] = useState<Record<string, any>>({});
 
+  const resetForm = () => {
+    setSearchQuery('');
+    setSelectedResident('');
+    setSelectedResidentId('');
+    setPurpose('');
+    setOtherPurpose('');
+    setDocumentType('Barangay Business Clearance');
+    setActiveConfig(null);
+    setFormData({});
+  };
+
   // Block navigation when on Step 2
   useEffect(() => {
     if (setIsNavigationBlocked) {
@@ -46,12 +57,6 @@ const Document: React.FC<DocumentProps> = ({ setIsNavigationBlocked }) => {
   });
   const residents = residentsData?.data ?? [];
 
-  // Fetch document types from API
-  const { data: docTypes } = useQuery({
-    queryKey: ['documentTypes'],
-    queryFn: () => documentsService.getTypes(),
-  });
-
   const getFullName = (r: any) => {
     const first = r.firstName || r.first_name || '';
     const middle = r.middleName || r.middle_name || '';
@@ -66,73 +71,44 @@ const Document: React.FC<DocumentProps> = ({ setIsNavigationBlocked }) => {
     ), [residents, searchQuery]
   );
 
-  // Map config name to backend document type ID
-  const getDocumentTypeId = (configName: string): string | null => {
-    if (!docTypes) return null;
-    const match = docTypes.find(dt => dt.documentName === configName);
-    return match?.id ?? null;
-  };
-
-  const handleProceed = async () => {
+  const handleProceed = () => {
     const config = getDocumentConfig(documentType);
     if (!config) {
-      alert('Configuration for this document type not found.');
+      alert('Configuration not found.');
+      return;
+    }
+    if (!selectedResidentId) {
+      alert('Please select a resident.');
       return;
     }
 
-    // Find selected resident object
-    const residentObj = residents.find(r => getFullName(r) === selectedResident || getFullName(r) === searchQuery);
-    const residentId = residentObj?.id || residentObj?.resident_id || selectedResidentId;
-    
-    if (!residentId) {
-      alert('Please select a valid resident.');
-      return;
-    }
+    const resident = residents.find(r => r.id === selectedResidentId);
+    if (!resident) return;
 
-    const documentTypeId = getDocumentTypeId(documentType);
-    if (!documentTypeId) {
-      alert('Document type not found in the system. Please ensure document types are seeded in the database.');
-      return;
-    }
+    setActiveConfig(config);
 
-    try {
-      // Create document via API
-      const result = await documentsService.create({
-        residentId,
-        documentTypeId,
-        purpose: purpose === 'Other' ? otherPurpose : purpose,
-      });
+    const initialData: Record<string, any> = {
+      selectedResident: getFullName(resident),
+      purpose: purpose === 'Other' ? otherPurpose : purpose,
+      barangayName: settings.barangayName,
+      municipality: settings.municipality,
+      province: settings.province,
+      punongBarangay: settings.punongBarangay,
+    };
 
-      setActiveConfig(config);
-
-      // Initialize form data with defaults, resident info, and API-generated numbers
-      const initialData: Record<string, any> = {
-        selectedResident: residentObj ? getFullName(residentObj) : (selectedResident || searchQuery),
-        purpose: purpose === 'Other' ? otherPurpose : purpose,
-        dateIssued: new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }),
-        barangayName: settings.barangayName,
-        municipality: settings.municipality,
-        province: settings.province,
-        punongBarangay: settings.punongBarangay,
-        orNumber: result.order?.orNumber ?? '',
-      };
-
-      config.fields.forEach(field => {
-        if (field.residentAttribute && residentObj) {
-          const attr = residentObj[field.residentAttribute] ?? residentObj[field.residentAttribute as keyof typeof residentObj];
-          if (attr) {
-            initialData[field.key] = String(attr);
-          }
-        } else if (field.defaultValue) {
-          initialData[field.key] = field.defaultValue;
+    config.fields.forEach(field => {
+      if (field.residentAttribute) {
+        const attr = resident[field.residentAttribute as keyof typeof resident] ?? (resident as any)[field.residentAttribute];
+        if (attr) {
+          initialData[field.key] = String(attr);
         }
-      });
+      } else if (field.defaultValue) {
+        initialData[field.key] = field.defaultValue;
+      }
+    });
 
-      setFormData(initialData);
-      setStep(2);
-    } catch (err: any) {
-      alert(`Failed to create document: ${err.message}`);
-    }
+    setFormData(initialData);
+    setStep(2);
   };
 
   const handleBack = () => {
@@ -148,8 +124,30 @@ const Document: React.FC<DocumentProps> = ({ setIsNavigationBlocked }) => {
     }));
   };
 
-  const handlePrint = () => {
-    window.print();
+  const handlePrint = async () => {
+    if (!selectedResidentId || !activeConfig) return;
+
+    try {
+      const result = await documentsService.create({
+        residentId: selectedResidentId,
+        documentTypeId: activeConfig.id,
+        purpose: purpose === 'Other' ? otherPurpose : purpose,
+      });
+
+      setFormData(prev => ({
+        ...prev,
+        orNumber: result.order?.orNumber ?? '',
+      }));
+
+      window.print();
+
+      setTimeout(() => {
+        resetForm();
+        setStep(1);
+      }, 500);
+    } catch (err) {
+      alert('Failed to create document. Please try again.');
+    }
   };
 
   return (
