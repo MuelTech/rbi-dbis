@@ -3,7 +3,6 @@ import { api } from "./api";
 export interface DocumentRecord {
   id: string;
   displayId: number;
-  documentNumber: string;
   issueDate: string;
   purpose: string;
   validityPeriod: string;
