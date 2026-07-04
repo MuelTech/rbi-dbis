@@ -115,7 +115,6 @@ const Document: React.FC<DocumentProps> = ({ setIsNavigationBlocked }) => {
         province: settings.province,
         punongBarangay: settings.punongBarangay,
         orNumber: result.order?.orNumber ?? '',
-        documentNumber: result.documentNumber ?? '',
       };
 
       config.fields.forEach(field => {
