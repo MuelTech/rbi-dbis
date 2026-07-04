@@ -21,6 +21,12 @@ export interface DocumentRecord {
   } | null;
 }
 
+export interface DocumentTypeRecord {
+  id: string;
+  documentName: string;
+  amount: number;
+}
+
 export interface CreateDocumentPayload {
   residentId: string;
   documentTypeId: string;
@@ -29,6 +35,7 @@ export interface CreateDocumentPayload {
 }
 
 export const documentsService = {
+  getTypes: () => api.get<DocumentTypeRecord[]>("/documents/types"),
   getAll: () => api.get<DocumentRecord[]>("/documents"),
   getById: (id: string) => api.get<DocumentRecord>(`/documents/${id}`),
   create: (data: CreateDocumentPayload) =>

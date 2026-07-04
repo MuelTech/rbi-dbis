@@ -1,16 +1,20 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Search, ArrowRight, FileText, User, Calendar, MapPin, CheckCircle, Printer, ArrowLeft } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
 import ContentCard from '@/components/ui/ContentCard';
 import CustomDropdown from '@/components/ui/CustomDropdown';
 import { getDocumentConfig } from '@/config/documents';
 import { DocumentConfig } from '@/types';
 import { useSettings } from '@/hooks/useSettings';
+import { residentsService } from '@/services/residents';
+import { documentsService } from '@/services/documents';
 
 const Document: React.FC = () => {
   const { settings } = useSettings();
   const [step, setStep] = useState(1);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedResident, setSelectedResident] = useState('');
+  const [selectedResidentId, setSelectedResidentId] = useState('');
   const [purpose, setPurpose] = useState('');
   const [otherPurpose, setOtherPurpose] = useState('');
   const [documentType, setDocumentType] = useState('Barangay Business Clearance');
@@ -19,85 +23,73 @@ const Document: React.FC = () => {
   const [activeConfig, setActiveConfig] = useState<DocumentConfig | null>(null);
   const [formData, setFormData] = useState<Record<string, any>>({});
 
-  // Mock residents for search
-  const residents: any[] = [
-    { 
-      resident_id: '1', 
-      first_name: 'Juan', 
-      last_name: 'Dela Cruz', 
-      middle_name: 'A',
-      suffix: '',
-      place_of_birth: 'Quezon City',
-      date_of_birth: '1990-01-01',
-      sex: 'Male',
-      civil_status: 'Single',
-      address: '123-B Maharlika Street, Rosal Alley, Sampaloc, Manila', 
-      is_voter: true,
-      is_owner: false,
-      student_type: '',
-      status_type: 'Active',
-      is_archived: false,
-      contact_number: '09123456789',
-      occupation_type: 'Employee',
-      record: ''
-    },
-    { 
-      resident_id: '2', 
-      first_name: 'Maria', 
-      last_name: 'Clara', 
-      middle_name: 'B',
-      suffix: '',
-      place_of_birth: 'Manila',
-      date_of_birth: '1992-05-05',
-      sex: 'Female',
-      civil_status: 'Married',
-      address: '456 Ilustrado Ave, Sampaloc, Manila', 
-      is_voter: true,
-      is_owner: true,
-      student_type: '',
-      status_type: 'Active',
-      is_archived: false,
-      contact_number: '09987654321',
-      occupation_type: 'Business Owner',
-      record: ''
-    },
-    { 
-      resident_id: '3', 
-      first_name: 'Jose', 
-      last_name: 'Rizal', 
-      middle_name: 'P',
-      suffix: '',
-      place_of_birth: 'Calamba',
-      date_of_birth: '1861-06-19',
-      sex: 'Male',
-      civil_status: 'Single',
-      address: '789 Calamba St, Sampaloc, Manila', 
-      is_voter: true,
-      is_owner: true,
-      student_type: '',
-      status_type: 'Active',
-      is_archived: false,
-      contact_number: '09111111111',
-      occupation_type: 'Doctor',
-      record: ''
-    },
-  ];
+  // Fetch real residents from API
+  const { data: residentsData } = useQuery({
+    queryKey: ['residents', { pageSize: 1000 }],
+    queryFn: () => residentsService.list({ pageSize: 1000 }),
+  });
+  const residents = residentsData?.data ?? [];
 
-  const getFullName = (r: any) => `${r.first_name} ${r.middle_name ? r.middle_name + '. ' : ''}${r.last_name}`;
+  // Fetch document types from API
+  const { data: docTypes } = useQuery({
+    queryKey: ['documentTypes'],
+    queryFn: () => documentsService.getTypes(),
+  });
 
-  const filteredResidents = residents.filter(r => 
-    getFullName(r).toLowerCase().includes(searchQuery.toLowerCase()) && searchQuery.length > 0
+  const getFullName = (r: any) => {
+    const first = r.firstName || r.first_name || '';
+    const middle = r.middleName || r.middle_name || '';
+    const last = r.lastName || r.last_name || '';
+    const suffix = r.suffix || '';
+    return `${first} ${middle ? middle + '. ' : ''}${last}${suffix ? ' ' + suffix : ''}`.trim();
+  };
+
+  const filteredResidents = useMemo(() => 
+    residents.filter(r => 
+      getFullName(r).toLowerCase().includes(searchQuery.toLowerCase()) && searchQuery.length > 0
+    ), [residents, searchQuery]
   );
 
-  const handleProceed = () => {
+  // Map config name to backend document type ID
+  const getDocumentTypeId = (configName: string): string | null => {
+    if (!docTypes) return null;
+    const match = docTypes.find(dt => dt.documentName === configName);
+    return match?.id ?? null;
+  };
+
+  const handleProceed = async () => {
     const config = getDocumentConfig(documentType);
-    if (config) {
+    if (!config) {
+      alert('Configuration for this document type not found.');
+      return;
+    }
+
+    // Find selected resident object
+    const residentObj = residents.find(r => getFullName(r) === selectedResident || getFullName(r) === searchQuery);
+    const residentId = residentObj?.id || residentObj?.resident_id || selectedResidentId;
+    
+    if (!residentId) {
+      alert('Please select a valid resident.');
+      return;
+    }
+
+    const documentTypeId = getDocumentTypeId(documentType);
+    if (!documentTypeId) {
+      alert('Document type not found in the system. Please ensure document types are seeded in the database.');
+      return;
+    }
+
+    try {
+      // Create document via API
+      const result = await documentsService.create({
+        residentId,
+        documentTypeId,
+        purpose: purpose === 'Other' ? otherPurpose : purpose,
+      });
+
       setActiveConfig(config);
-      
-      // Find selected resident object
-      const residentObj = residents.find(r => getFullName(r) === selectedResident || getFullName(r) === searchQuery);
-      
-      // Initialize form data with defaults and resident info
+
+      // Initialize form data with defaults, resident info, and API-generated numbers
       const initialData: Record<string, any> = {
         selectedResident: residentObj ? getFullName(residentObj) : (selectedResident || searchQuery),
         purpose: purpose === 'Other' ? otherPurpose : purpose,
@@ -106,23 +98,25 @@ const Document: React.FC = () => {
         municipality: settings.municipality,
         province: settings.province,
         punongBarangay: settings.punongBarangay,
+        orNumber: result.order?.orNumber ?? '',
+        documentNumber: result.documentNumber ?? '',
       };
 
       config.fields.forEach(field => {
-        // 1. Priority: Resident Attribute (Auto-fill)
-        if (field.residentAttribute && residentObj && residentObj[field.residentAttribute]) {
-             initialData[field.key] = residentObj[field.residentAttribute];
-        } 
-        // 2. Fallback: Default Value
-        else if (field.defaultValue) {
+        if (field.residentAttribute && residentObj) {
+          const attr = residentObj[field.residentAttribute] ?? residentObj[field.residentAttribute as keyof typeof residentObj];
+          if (attr) {
+            initialData[field.key] = String(attr);
+          }
+        } else if (field.defaultValue) {
           initialData[field.key] = field.defaultValue;
         }
       });
 
       setFormData(initialData);
       setStep(2);
-    } else {
-      alert('Configuration for this document type not found.');
+    } catch (err: any) {
+      alert(`Failed to create document: ${err.message}`);
     }
   };
 
@@ -184,7 +178,8 @@ const Document: React.FC = () => {
                         value={searchQuery}
                         onChange={(e) => {
                             setSearchQuery(e.target.value);
-                            setSelectedResident(''); // Reset selection on type
+                            setSelectedResident('');
+                            setSelectedResidentId('');
                         }}
                         />
                         {/* Dropdown results */}
@@ -192,11 +187,12 @@ const Document: React.FC = () => {
                         <div className="absolute z-10 w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-lg max-h-48 overflow-y-auto">
                             {filteredResidents.map((resident, index) => (
                             <button
-                                key={index}
+                                key={resident.id || index}
                                 className="w-full text-left px-4 py-3 hover:bg-gray-50 text-gray-700 text-sm transition-colors"
                                 onClick={() => {
                                 setSearchQuery(getFullName(resident));
                                 setSelectedResident(getFullName(resident));
+                                setSelectedResidentId(resident.id || resident.resident_id || '');
                                 }}
                             >
                                 {getFullName(resident)}
@@ -247,6 +243,7 @@ const Document: React.FC = () => {
                         options={[
                         'Barangay Clearance',
                         'Barangay Business Clearance',
+                        'Business Permit',
                         'Certificate of Indigency',
                         'Certificate of Residency'
                         ]}
@@ -306,9 +303,27 @@ const Document: React.FC = () => {
                                 <div className="mt-0.5 text-gray-400"><MapPin size={16} /></div>
                                 <div>
                                     <p className="text-[11px] font-bold text-gray-500 uppercase">Address</p>
-                                    <p className="text-sm font-bold text-gray-900">123-B Maharlika Street, Rosal Alley, Quezon City</p>
+                                    <p className="text-sm font-bold text-gray-900">{formData.address || '—'}</p>
                                 </div>
                             </div>
+                            {formData.orNumber && (
+                            <div className="flex gap-3">
+                                <div className="mt-0.5 text-gray-400"><FileText size={16} /></div>
+                                <div>
+                                    <p className="text-[11px] font-bold text-gray-500 uppercase">OR Number</p>
+                                    <p className="text-sm font-bold text-gray-900">{formData.orNumber}</p>
+                                </div>
+                            </div>
+                            )}
+                            {formData.documentNumber && (
+                            <div className="flex gap-3">
+                                <div className="mt-0.5 text-gray-400"><FileText size={16} /></div>
+                                <div>
+                                    <p className="text-[11px] font-bold text-gray-500 uppercase">Document Number</p>
+                                    <p className="text-sm font-bold text-gray-900">{formData.documentNumber}</p>
+                                </div>
+                            </div>
+                            )}
                         </div>
                     </div>
 
