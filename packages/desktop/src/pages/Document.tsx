@@ -57,6 +57,19 @@ const Document: React.FC<DocumentProps> = ({ setIsNavigationBlocked }) => {
   });
   const residents = residentsData?.data ?? [];
 
+  // Fetch document types from API to get database IDs
+  const { data: docTypes } = useQuery({
+    queryKey: ['documentTypes'],
+    queryFn: () => documentsService.getTypes(),
+  });
+
+  // Fetch resident details when selected (to get address)
+  const { data: residentDetails } = useQuery({
+    queryKey: ['resident', selectedResidentId],
+    queryFn: () => residentsService.getById(selectedResidentId),
+    enabled: !!selectedResidentId,
+  });
+
   const getFullName = (r: any) => {
     const first = r.firstName || r.first_name || '';
     const middle = r.middleName || r.middle_name || '';
@@ -85,6 +98,13 @@ const Document: React.FC<DocumentProps> = ({ setIsNavigationBlocked }) => {
     const resident = residents.find(r => r.id === selectedResidentId);
     if (!resident) return;
 
+    // Get database document type ID
+    const dbDocType = docTypes?.find(dt => dt.documentName === documentType);
+    if (!dbDocType) {
+      alert('Document type not found in database.');
+      return;
+    }
+
     setActiveConfig(config);
 
     const initialData: Record<string, any> = {
@@ -94,13 +114,19 @@ const Document: React.FC<DocumentProps> = ({ setIsNavigationBlocked }) => {
       municipality: settings.municipality,
       province: settings.province,
       punongBarangay: settings.punongBarangay,
+      documentTypeId: dbDocType.id,
     };
 
     config.fields.forEach(field => {
       if (field.residentAttribute) {
-        const attr = resident[field.residentAttribute as keyof typeof resident] ?? (resident as any)[field.residentAttribute];
-        if (attr) {
-          initialData[field.key] = String(attr);
+        // For address, use residentDetails if available
+        if (field.residentAttribute === 'address' && residentDetails?.household) {
+          initialData[field.key] = `${residentDetails.household.streetName}, ${residentDetails.household.alley}, Sampaloc, Manila`;
+        } else {
+          const attr = resident[field.residentAttribute as keyof typeof resident] ?? (resident as any)[field.residentAttribute];
+          if (attr) {
+            initialData[field.key] = String(attr);
+          }
         }
       } else if (field.defaultValue) {
         initialData[field.key] = field.defaultValue;
@@ -127,10 +153,17 @@ const Document: React.FC<DocumentProps> = ({ setIsNavigationBlocked }) => {
   const handlePrint = async () => {
     if (!selectedResidentId || !activeConfig) return;
 
+    // Get documentTypeId from formData (database ID)
+    const documentTypeId = formData.documentTypeId;
+    if (!documentTypeId) {
+      alert('Document type not found. Please try again.');
+      return;
+    }
+
     try {
       const result = await documentsService.create({
         residentId: selectedResidentId,
-        documentTypeId: activeConfig.id,
+        documentTypeId,
         purpose: purpose === 'Other' ? otherPurpose : purpose,
       });
 
