@@ -1,54 +1,7 @@
 import React, { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import { Search, ChevronDown, ChevronRight, ChevronLeft, Calendar, Coins, FileText } from 'lucide-react';
-import { Transaction } from '@/types';
-
-const MOCK_DATA = {
-  'Day': {
-    accumulatedFee: '₱3,212',
-    totalTransactions: 31,
-    transactions: [
-      { id: '001', displayId: 1, dateIssued: '16/06/2025', personnel: 'Nayeon', resident: 'Maria Santos', type: 'Barangay Clearance', fee: 200 },
-      { id: '002', displayId: 2, dateIssued: '16/06/2025', personnel: 'Nayeon', resident: 'Aries Castanas', type: 'Certificate of Indigency', fee: 200 },
-      { id: '003', displayId: 3, dateIssued: '16/06/2025', personnel: 'Nayeon', resident: 'Arwind Jae Mendoza', type: 'Certificate of Residency', fee: 200 },
-      { id: '004', displayId: 4, dateIssued: '16/06/2025', personnel: 'Nayeon', resident: 'Matt Dwayne Gagarin', type: 'Certificate of First Time Job Seeker', fee: 200 },
-      { id: '005', displayId: 5, dateIssued: '16/06/2025', personnel: 'Nayeon', resident: 'John Lemuel Teano', type: 'Business Permit', fee: 200 },
-      { id: '006', displayId: 6, dateIssued: '16/06/2025', personnel: 'Nayeon', resident: 'Minatozaki Sana', type: 'Certificate of No Income', fee: 200 },
-      { id: '007', displayId: 7, dateIssued: '16/06/2025', personnel: 'Nayeon', resident: 'Mitsubishi Haduken', type: 'Certificate of Live Birth', fee: 200 },
-      { id: '008', displayId: 8, dateIssued: '16/06/2025', personnel: 'Nayeon', resident: 'Jennie Kim', type: 'Barangay Indigency', fee: 200 },
-    ]
-  },
-  'Week': {
-    accumulatedFee: '₱15,450',
-    totalTransactions: 142,
-    transactions: [
-      { id: '009', displayId: 9, dateIssued: '15/06/2025', personnel: 'Sana', resident: 'Kim Dahyun', type: 'Barangay Clearance', fee: 200 },
-      { id: '010', displayId: 10, dateIssued: '14/06/2025', personnel: 'Sana', resident: 'Chou Tzuyu', type: 'Business Permit', fee: 500 },
-      { id: '011', displayId: 11, dateIssued: '13/06/2025', personnel: 'Nayeon', resident: 'Park Jihyo', type: 'Certificate of Residency', fee: 200 },
-      { id: '012', displayId: 12, dateIssued: '12/06/2025', personnel: 'Sana', resident: 'Hirai Momo', type: 'Barangay Indigency', fee: 0 },
-      { id: '013', displayId: 13, dateIssued: '11/06/2025', personnel: 'Nayeon', resident: 'Yoo Jeongyeon', type: 'Certificate of Live Birth', fee: 200 },
-      { id: '014', displayId: 14, dateIssued: '10/06/2025', personnel: 'Sana', resident: 'Son Chaeyoung', type: 'Certificate of No Income', fee: 200 },
-    ]
-  },
-  'Month': {
-    accumulatedFee: '₱68,900',
-    totalTransactions: 523,
-    transactions: [
-      { id: '015', displayId: 15, dateIssued: '01/06/2025', personnel: 'Nayeon', resident: 'Im Nayeon', type: 'Business Permit', fee: 1000 },
-      { id: '016', displayId: 16, dateIssued: '05/06/2025', personnel: 'Sana', resident: 'Myoui Mina', type: 'Barangay Clearance', fee: 200 },
-      { id: '017', displayId: 17, dateIssued: '10/06/2025', personnel: 'Nayeon', resident: 'Kim Jisoo', type: 'Certificate of Residency', fee: 200 },
-      { id: '018', displayId: 18, dateIssued: '15/06/2025', personnel: 'Sana', resident: 'Lalisa Manobal', type: 'Certificate of Indigency', fee: 0 },
-      { id: '019', displayId: 19, dateIssued: '20/06/2025', personnel: 'Nayeon', resident: 'Roseanne Park', type: 'Certificate of First Time Job Seeker', fee: 0 },
-    ]
-  },
-  'Custom': {
-    accumulatedFee: '₱5,100',
-    totalTransactions: 45,
-    transactions: [
-       { id: '020', displayId: 20, dateIssued: '20/06/2025', personnel: 'Nayeon', resident: 'Custom Range User 1', type: 'Barangay Clearance', fee: 200 },
-       { id: '021', displayId: 21, dateIssued: '21/06/2025', personnel: 'Sana', resident: 'Custom Range User 2', type: 'Business Permit', fee: 500 },
-    ]
-  }
-};
+import { useQuery } from '@tanstack/react-query';
+import { dashboardService } from '@/services/dashboard';
 
 interface SummaryCardProps {
   title: string;
@@ -88,7 +41,19 @@ const TransactionSection: React.FC = () => {
   const containerRef = useRef<HTMLDivElement>(null);
   const headerRef = useRef<HTMLTableSectionElement>(null);
 
-  const currentData = MOCK_DATA[activeTab as keyof typeof MOCK_DATA] || MOCK_DATA['Day'];
+  const { data, isLoading } = useQuery({
+    queryKey: ['transactions', { period: activeTab, page: currentPage }],
+    queryFn: () => dashboardService.getTransactions({
+      period: activeTab === 'Custom' ? undefined : activeTab.toLowerCase(),
+      page: currentPage,
+      pageSize: itemsPerPage,
+    }),
+  });
+
+  const transactions = data?.data ?? [];
+  const summary = data?.summary ?? { accumulatedFee: 0, totalTransactions: 0 };
+  const totalPages = data?.meta.totalPages ?? 0;
+  const startIndex = (currentPage - 1) * itemsPerPage;
   
   // Dynamic Layout Calculation
   useLayoutEffect(() => {
@@ -126,10 +91,7 @@ const TransactionSection: React.FC = () => {
       return () => observer.disconnect();
   }, []);
 
-  const totalPages = Math.ceil(currentData.transactions.length / itemsPerPage);
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const paginatedTransactions = currentData.transactions.slice(startIndex, startIndex + itemsPerPage);
-  const emptyRows = Math.max(0, itemsPerPage - paginatedTransactions.length);
+  const emptyRows = Math.max(0, itemsPerPage - transactions.length);
 
   const handleDateApply = () => {
     setActiveTab('Custom');
@@ -142,11 +104,10 @@ const TransactionSection: React.FC = () => {
   }, [activeTab]);
 
   useEffect(() => {
-    const totalPages = Math.ceil(currentData.transactions.length / itemsPerPage);
     if (totalPages > 0 && currentPage > totalPages) {
         setCurrentPage(totalPages);
     }
-  }, [itemsPerPage, currentData.transactions.length, currentPage]);
+  }, [itemsPerPage, totalPages, currentPage]);
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -266,18 +227,18 @@ const TransactionSection: React.FC = () => {
 
           {/* Summary Cards */}
           <div className="flex flex-col gap-[clamp(0.75rem,1.25vw,1.25rem)] mt-auto flex-1">
-            <SummaryCard 
-              title="Accumulated Fee" 
-              value={currentData.accumulatedFee} 
-              icon={Coins} 
-              iconBg="bg-orange-100" 
+            <SummaryCard
+              title="Accumulated Fee"
+              value={`₱${summary.accumulatedFee.toLocaleString()}`}
+              icon={Coins}
+              iconBg="bg-orange-100"
               iconColor="text-orange-500"
             />
-            <SummaryCard 
-              title="Total Transactions" 
-              value={currentData.totalTransactions} 
-              icon={FileText} 
-              iconBg="bg-teal-100" 
+            <SummaryCard
+              title="Total Transactions"
+              value={summary.totalTransactions}
+              icon={FileText}
+              iconBg="bg-teal-100"
               iconColor="text-teal-500"
             />
           </div>
@@ -310,9 +271,9 @@ const TransactionSection: React.FC = () => {
             <table className="w-full border-separate border-spacing-0 table-fixed">
               <thead ref={headerRef} className="sticky top-0 bg-white z-10">
                 <tr className="border-b border-gray-100">
-                  <th className="w-[15%] text-left py-2 px-3 xl:px-4 text-[9px] xl:text-[11px] font-bold text-blue-500 uppercase tracking-wider whitespace-nowrap">Transaction ID</th>
+                  <th className="w-[15%] text-left py-2 px-3 xl:px-4 text-[9px] xl:text-[11px] font-bold text-blue-500 uppercase tracking-wider whitespace-nowrap">OR Number</th>
                   <th className="w-[15%] text-left py-2 px-3 xl:px-4 text-[9px] xl:text-[11px] font-bold text-blue-500 uppercase tracking-wider whitespace-nowrap">Date Issued</th>
-                  <th className="w-[12%] text-left py-2 px-3 xl:px-4 text-[9px] xl:text-[11px] font-bold text-blue-500 uppercase tracking-wider whitespace-nowrap">Personel</th>
+                  <th className="w-[12%] text-left py-2 px-3 xl:px-4 text-[9px] xl:text-[11px] font-bold text-blue-500 uppercase tracking-wider whitespace-nowrap">Personnel</th>
                   <th className="w-[18%] text-left py-2 px-3 xl:px-4 text-[9px] xl:text-[11px] font-bold text-blue-500 uppercase tracking-wider whitespace-nowrap">Resident</th>
                   <th className="w-[20%] text-left py-2 px-3 xl:px-4 text-[9px] xl:text-[11px] font-bold text-blue-500 uppercase tracking-wider whitespace-nowrap">Type</th>
                   <th className="w-[10%] text-left py-2 px-3 xl:px-4 text-[9px] xl:text-[11px] font-bold text-blue-500 uppercase tracking-wider whitespace-nowrap">Fee</th>
@@ -320,14 +281,14 @@ const TransactionSection: React.FC = () => {
                 </tr>
               </thead>
               <tbody>
-                {paginatedTransactions.map((t) => (
+                {transactions.map((t) => (
                   <tr key={t.id} className="border-b border-gray-50 last:border-none hover:bg-gray-50 transition-colors group" style={{ height: `${rowHeight}px` }}>
-                    <td className="px-3 xl:px-4 text-[11px] xl:text-[13px] text-gray-600 font-medium truncate">{'ORD-' + String(t.displayId ?? 0).padStart(6, '0')}</td>
-                    <td className="px-3 xl:px-4 text-[11px] xl:text-[13px] text-gray-600 truncate">{t.dateIssued}</td>
+                    <td className="px-3 xl:px-4 text-[11px] xl:text-[13px] text-gray-600 font-medium truncate">{t.orNumber}</td>
+                    <td className="px-3 xl:px-4 text-[11px] xl:text-[13px] text-gray-600 truncate">{new Date(t.orderDate).toLocaleDateString('en-GB')}</td>
                     <td className="px-3 xl:px-4 text-[11px] xl:text-[13px] text-gray-600 truncate">{t.personnel}</td>
                     <td className="px-3 xl:px-4 text-[11px] xl:text-[13px] text-gray-600 truncate">{t.resident}</td>
-                    <td className="px-3 xl:px-4 text-[11px] xl:text-[13px] text-gray-600 truncate" title={t.type}>{t.type}</td>
-                    <td className="px-3 xl:px-4 text-[11px] xl:text-[13px] text-gray-900 font-bold truncate">₱{t.fee}</td>
+                    <td className="px-3 xl:px-4 text-[11px] xl:text-[13px] text-gray-600 truncate" title={t.documentType}>{t.documentType}</td>
+                    <td className="px-3 xl:px-4 text-[11px] xl:text-[13px] text-gray-900 font-bold truncate">₱{t.amount}</td>
                     <td className="px-3 xl:px-4 text-center">
                       <button className="text-blue-500 border-2 border-blue-500 rounded-full px-3 xl:px-4 py-1 text-[10px] xl:text-[11px] font-bold hover:bg-blue-50 transition-colors">
                         View
@@ -347,7 +308,7 @@ const TransactionSection: React.FC = () => {
           {/* Pagination */}
           <div className="flex items-center justify-between mt-auto pt-[clamp(0.75rem,1.5vh,1.5rem)] border-t border-gray-50">
              <span className="text-[10px] xl:text-[11px] text-gray-400 font-medium">
-               Showing {startIndex + 1}-{Math.min(startIndex + itemsPerPage, currentData.transactions.length)} of {currentData.transactions.length}
+               Showing {transactions.length > 0 ? startIndex + 1 : 0}-{Math.min(startIndex + transactions.length, data?.meta.total ?? 0)} of {data?.meta.total ?? 0}
              </span>
              <div className="flex items-center gap-1.5">
                 <button 
