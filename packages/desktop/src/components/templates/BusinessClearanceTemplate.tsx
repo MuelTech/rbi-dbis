@@ -6,8 +6,6 @@ const BusinessClearanceTemplate: React.FC<{ data: any }> = ({ data }) => {
     selectedResident,
     businessAddress,
     natureOfBusiness,
-    amountPaid,
-    status,
     barangayName,
     punongBarangay,
   } = data;

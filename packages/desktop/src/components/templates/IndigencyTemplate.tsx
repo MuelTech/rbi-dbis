@@ -5,14 +5,11 @@ const IndigencyTemplate: React.FC<{ data: any }> = ({ data }) => {
     selectedResident,
     address,
     purpose,
-    dateIssued,
     day,
     month,
     year,
-    amountPaid,
     barangayName,
     punongBarangay,
-    controlNo,
   } = data;
 
   return (
