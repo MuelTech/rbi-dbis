@@ -46,14 +46,6 @@ export const documentConfigs: DocumentConfig[] = [
         options: ['Sole Proprietorship', 'Partnership', 'Corporation', 'Cooperative'],
         defaultValue: 'Sole Proprietorship',
         width: 'full'
-      },
-      {
-        key: 'amountPaid',
-        label: 'Amount Paid',
-        type: 'currency',
-        source: 'system',
-        defaultValue: '500',
-        width: 'full'
       }
     ]
   },
@@ -104,14 +96,6 @@ export const documentConfigs: DocumentConfig[] = [
         type: 'text',
         source: 'input',
         placeholder: 'e.g. 2026-418-0006',
-        width: 'full'
-      },
-      {
-        key: 'amountPaid',
-        label: 'Amount Paid',
-        type: 'currency',
-        source: 'system',
-        defaultValue: '500',
         width: 'full'
       }
     ]
@@ -169,22 +153,6 @@ export const documentConfigs: DocumentConfig[] = [
         source: 'input',
         defaultValue: '2026',
         width: 'half'
-      },
-      {
-        key: 'controlNo',
-        label: 'Control Number',
-        type: 'text',
-        source: 'input',
-        placeholder: 'e.g. 2026-418-0001',
-        width: 'half'
-      },
-      {
-        key: 'amountPaid',
-        label: 'Amount Paid',
-        type: 'currency',
-        source: 'system',
-        defaultValue: '0',
-        width: 'full'
       }
     ]
   },
