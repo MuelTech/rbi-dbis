@@ -186,7 +186,7 @@ const Document: React.FC<DocumentProps> = ({ setIsNavigationBlocked }) => {
   return (
     <ContentCard className="relative">
       {/* Header inside the card - Hidden on Print */}
-      <div className="absolute top-0 left-0 w-full p-6 border-b border-gray-50 bg-white z-10 print:hidden">
+      <div className="sticky top-0 left-0 w-full p-6 border-b border-gray-50 bg-white z-20 print:hidden">
         <div className="flex items-center gap-3">
           <div className="p-2 bg-blue-50 rounded-lg text-blue-600">
             <FileText size={20} />
@@ -202,7 +202,7 @@ const Document: React.FC<DocumentProps> = ({ setIsNavigationBlocked }) => {
       </div>
 
       {/* Content Area */}
-      <div className="flex-1 overflow-y-auto pt-20 custom-scrollbar print:pt-0 print:overflow-visible">
+      <div className="flex-1 overflow-y-auto custom-scrollbar print:overflow-visible">
         {step === 1 ? (
             <div className="flex items-center justify-center min-h-full p-6">
                 <div className="bg-white p-8 rounded-3xl shadow-sm border border-gray-100 w-full max-w-xl">
