@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Search, ArrowRight, FileText, User, Calendar, MapPin, CheckCircle, Printer, ArrowLeft } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import ContentCard from '@/components/ui/ContentCard';
@@ -9,7 +9,11 @@ import { useSettings } from '@/hooks/useSettings';
 import { residentsService } from '@/services/residents';
 import { documentsService } from '@/services/documents';
 
-const Document: React.FC = () => {
+interface DocumentProps {
+  setIsNavigationBlocked?: (blocked: boolean) => void;
+}
+
+const Document: React.FC<DocumentProps> = ({ setIsNavigationBlocked }) => {
   const { settings } = useSettings();
   const [step, setStep] = useState(1);
   const [searchQuery, setSearchQuery] = useState('');
@@ -18,10 +22,22 @@ const Document: React.FC = () => {
   const [purpose, setPurpose] = useState('');
   const [otherPurpose, setOtherPurpose] = useState('');
   const [documentType, setDocumentType] = useState('Barangay Business Clearance');
-  
+
   // Dynamic State
   const [activeConfig, setActiveConfig] = useState<DocumentConfig | null>(null);
   const [formData, setFormData] = useState<Record<string, any>>({});
+
+  // Block navigation when on Step 2
+  useEffect(() => {
+    if (setIsNavigationBlocked) {
+      setIsNavigationBlocked(step === 2);
+    }
+    return () => {
+      if (setIsNavigationBlocked) {
+        setIsNavigationBlocked(false);
+      }
+    };
+  }, [step, setIsNavigationBlocked]);
 
   // Fetch real residents from API
   const { data: residentsData } = useQuery({

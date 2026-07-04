@@ -175,7 +175,7 @@ const App: React.FC = () => {
 
                 <Route path="/document" element={
                     <div className="flex-1 overflow-hidden h-full print:overflow-visible print:h-auto">
-                        <Document />
+                        <Document setIsNavigationBlocked={setIsNavigationBlocked} />
                     </div>
                 } />
 
