@@ -90,10 +90,6 @@ const BusinessClearanceTemplate: React.FC<{ data: any }> = ({ data }) => {
           <span>OR Number:</span>
           <span>{data.orNumber || 'N/A'}</span>
         </div>
-        <div className="grid grid-cols-[100px_1fr] gap-1">
-          <span>Doc Number:</span>
-          <span>{data.documentNumber || 'N/A'}</span>
-        </div>
       </div>
 
       {/* Watermark/Seal Placeholder */}
