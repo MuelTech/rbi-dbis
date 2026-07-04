@@ -1,6 +1,7 @@
 import { Router } from "express";
-import { getResidentDemographics } from "../controllers/dashboardController.js";
+import { getResidentDemographics, getTransactions } from "../controllers/dashboardController.js";
 
 export const dashboardRouter = Router();
 
 dashboardRouter.get("/resident-demographics", getResidentDemographics);
+dashboardRouter.get("/transactions", getTransactions);
