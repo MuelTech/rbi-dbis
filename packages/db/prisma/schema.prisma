@@ -240,7 +240,6 @@ model Order {
 model Document {
   id             String   @id @default(cuid())
   displayId      Int      @unique @default(autoincrement()) @map("display_id")
-  documentNumber String   @unique @map("document_number") @db.VarChar(20)
   issueDate      DateTime @map("issue_date") @db.Date
   purpose        String?  @db.VarChar(255)
   validityPeriod String?  @map("validity_period") @db.VarChar(50)
