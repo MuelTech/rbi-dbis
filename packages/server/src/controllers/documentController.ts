@@ -107,26 +107,10 @@ export async function createDocument(
     }
     const orNumber = `${currentYear}-418-${String(orSequence).padStart(5, "0")}`;
 
-    // Generate unique document number: DOC-XXXXX
-    const lastDocument = await prisma.document.findFirst({
-      orderBy: { createdAt: "desc" },
-      select: { documentNumber: true },
-    });
-
-    let docSequence = 1;
-    if (lastDocument) {
-      const match = lastDocument.documentNumber.match(/DOC-(\d+)/);
-      if (match) {
-        docSequence = parseInt(match[1], 10) + 1;
-      }
-    }
-    const documentNumber = `DOC-${String(docSequence).padStart(5, "0")}`;
-
     // Create Document and Order in a transaction
     const result = await prisma.$transaction(async (tx) => {
       const document = await tx.document.create({
         data: {
-          documentNumber,
           issueDate: new Date(),
           purpose: purpose || null,
           validityPeriod: validityPeriod || null,
@@ -151,7 +135,6 @@ export async function createDocument(
     // Log the creation
     if (userId) {
       await logCreate("documents", result.document.id, userId, {
-        documentNumber: result.document.documentNumber,
         purpose: result.document.purpose,
         orNumber: result.order.orNumber,
       });
