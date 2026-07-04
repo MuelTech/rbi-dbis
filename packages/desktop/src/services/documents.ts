@@ -2,18 +2,35 @@ import { api } from "./api";
 
 export interface DocumentRecord {
   id: string;
-  displayId?: number;
-  type: string;
-  dateIssued: string;
-  personnel: string;
-  fee: number;
-  data?: Record<string, unknown>;
+  displayId: number;
+  documentNumber: string;
+  issueDate: string;
+  purpose: string;
+  validityPeriod: string;
+  documentType: {
+    id: string;
+    documentName: string;
+    amount: number;
+  };
+  order: {
+    id: string;
+    displayId: number;
+    orNumber: string;
+    amount: number;
+    orderDate: string;
+  } | null;
+}
+
+export interface CreateDocumentPayload {
   residentId: string;
+  documentTypeId: string;
+  purpose: string;
+  validityPeriod?: string;
 }
 
 export const documentsService = {
   getAll: () => api.get<DocumentRecord[]>("/documents"),
   getById: (id: string) => api.get<DocumentRecord>(`/documents/${id}`),
-  create: (data: Partial<DocumentRecord>) =>
+  create: (data: CreateDocumentPayload) =>
     api.post<DocumentRecord>("/documents", data),
 };
