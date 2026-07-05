@@ -1,8 +1,9 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Search, ArrowRight, FileText, User, Calendar, MapPin, CheckCircle, Printer, ArrowLeft } from 'lucide-react';
+import { Search, ArrowRight, FileText, User, Calendar, MapPin, CheckCircle, Printer, ArrowLeft, AlertTriangle } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import ContentCard from '@/components/ui/ContentCard';
 import CustomDropdown from '@/components/ui/CustomDropdown';
+import ConfirmationModal from '@/components/ui/ConfirmationModal';
 import { getDocumentConfig } from '@/config/documents';
 import { DocumentConfig } from '@/types';
 import { useSettings } from '@/hooks/useSettings';
@@ -26,6 +27,10 @@ const Document: React.FC<DocumentProps> = ({ setIsNavigationBlocked }) => {
   // Dynamic State
   const [activeConfig, setActiveConfig] = useState<DocumentConfig | null>(null);
   const [formData, setFormData] = useState<Record<string, any>>({});
+
+  // Confirmation Modal State
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [isIssuing, setIsIssuing] = useState(false);
 
   const resetForm = () => {
     setSearchQuery('');
@@ -150,15 +155,23 @@ const Document: React.FC<DocumentProps> = ({ setIsNavigationBlocked }) => {
     }));
   };
 
-  const handlePrint = async () => {
+  const handlePrint = () => {
+    // Show confirmation modal first
+    setShowConfirmModal(true);
+  };
+
+  const handleConfirmIssue = async () => {
     if (!selectedResidentId || !activeConfig) return;
 
     // Get documentTypeId from formData (database ID)
     const documentTypeId = formData.documentTypeId;
     if (!documentTypeId) {
       alert('Document type not found. Please try again.');
+      setShowConfirmModal(false);
       return;
     }
+
+    setIsIssuing(true);
 
     try {
       const result = await documentsService.create({
@@ -167,20 +180,32 @@ const Document: React.FC<DocumentProps> = ({ setIsNavigationBlocked }) => {
         purpose: purpose === 'Other' ? otherPurpose : purpose,
       });
 
+      // Update formData with OR Number
       setFormData(prev => ({
         ...prev,
         orNumber: result.order?.orNumber ?? '',
       }));
 
-      window.print();
+      setShowConfirmModal(false);
 
+      // Wait for state to update before printing
       setTimeout(() => {
-        resetForm();
-        setStep(1);
-      }, 500);
+        window.print();
+        setTimeout(() => {
+          resetForm();
+          setStep(1);
+          setIsIssuing(false);
+        }, 500);
+      }, 100);
     } catch (err) {
       alert('Failed to create document. Please try again.');
+      setShowConfirmModal(false);
+      setIsIssuing(false);
     }
+  };
+
+  const handleCancelIssue = () => {
+    setShowConfirmModal(false);
   };
 
   return (
@@ -438,6 +463,18 @@ const Document: React.FC<DocumentProps> = ({ setIsNavigationBlocked }) => {
             </button>
         </div>
       )}
+
+      {/* Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={showConfirmModal}
+        onClose={handleCancelIssue}
+        onConfirm={handleConfirmIssue}
+        title="Issue Document"
+        message={`Are you sure you want to issue this ${documentType}? This action cannot be undone.`}
+        confirmText={isIssuing ? "Issuing..." : "Issue & Print"}
+        cancelText="Cancel"
+        isLoading={isIssuing}
+      />
     </ContentCard>
   );
 };
