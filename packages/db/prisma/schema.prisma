@@ -243,6 +243,7 @@ model Document {
   issueDate      DateTime @map("issue_date") @db.Date
   purpose        String?  @db.VarChar(255)
   validityPeriod String?  @map("validity_period") @db.VarChar(50)
+  formData       Json?    @db.Json  // Store all dynamic input fields
   createdAt      DateTime @default(now()) @map("created_at")
 
   documentTypeId String       @map("document_type_id")
