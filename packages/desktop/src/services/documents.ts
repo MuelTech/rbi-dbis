@@ -6,6 +6,7 @@ export interface DocumentRecord {
   issueDate: string;
   purpose: string;
   validityPeriod: string;
+  formData: Record<string, any> | null;
   documentType: {
     id: string;
     documentName: string;
@@ -31,6 +32,7 @@ export interface CreateDocumentPayload {
   documentTypeId: string;
   purpose: string;
   validityPeriod?: string;
+  formData?: Record<string, any>;
 }
 
 export const documentsService = {
