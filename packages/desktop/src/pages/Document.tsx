@@ -178,6 +178,7 @@ const Document: React.FC<DocumentProps> = ({ setIsNavigationBlocked }) => {
         residentId: selectedResidentId,
         documentTypeId,
         purpose: purpose === 'Other' ? otherPurpose : purpose,
+        formData,
       });
 
       // Update formData with OR Number
