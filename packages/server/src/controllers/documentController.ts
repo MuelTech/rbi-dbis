@@ -74,7 +74,7 @@ export async function createDocument(
 ) {
   try {
     const userId = req.user?.id;
-    const { residentId, documentTypeId, purpose, validityPeriod } = req.body;
+    const { residentId, documentTypeId, purpose, validityPeriod, formData } = req.body;
 
     // Validate required fields
     if (!residentId || !documentTypeId) {
@@ -114,6 +114,7 @@ export async function createDocument(
           issueDate: new Date(),
           purpose: purpose || null,
           validityPeriod: validityPeriod || null,
+          formData: formData || null,
           documentTypeId,
         },
       });
