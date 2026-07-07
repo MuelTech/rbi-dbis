@@ -31,6 +31,10 @@ const TransactionSection: React.FC = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const datePickerRef = useRef<HTMLDivElement>(null);
   
+  // Date Range State
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+  
   // Personnel Dropdown State
   const [isPersonnelDropdownOpen, setIsPersonnelDropdownOpen] = useState(false);
   const [selectedPersonnel, setSelectedPersonnel] = useState('All');
@@ -54,10 +58,12 @@ const TransactionSection: React.FC = () => {
   });
 
   const { data, isLoading } = useQuery({
-    queryKey: ['transactions', { period: activeTab, page: currentPage, personnelId: selectedPersonnelId }],
+    queryKey: ['transactions', { period: activeTab, page: currentPage, personnelId: selectedPersonnelId, startDate, endDate }],
     queryFn: () => dashboardService.getTransactions({
       period: activeTab === 'Custom' ? undefined : activeTab.toLowerCase(),
       personnelId: selectedPersonnelId === 'All' ? undefined : selectedPersonnelId,
+      from: activeTab === 'Custom' ? startDate : undefined,
+      to: activeTab === 'Custom' ? endDate : undefined,
       page: currentPage,
       pageSize: itemsPerPage,
     }),
@@ -192,11 +198,21 @@ const TransactionSection: React.FC = () => {
                         <h4 className="text-xs font-bold text-gray-900 uppercase tracking-wider">Select Date Range</h4>
                         <div className="flex flex-col gap-1.5">
                             <label className="text-[10px] font-semibold text-gray-500 uppercase">Start Date</label>
-                            <input type="date" className="w-full bg-gray-50 border border-gray-200 text-gray-700 text-xs rounded-lg p-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none" />
+                            <input 
+                                type="date" 
+                                value={startDate}
+                                onChange={(e) => setStartDate(e.target.value)}
+                                className="w-full bg-gray-50 border border-gray-200 text-gray-700 text-xs rounded-lg p-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none" 
+                            />
                         </div>
                         <div className="flex flex-col gap-1.5">
                             <label className="text-[10px] font-semibold text-gray-500 uppercase">End Date</label>
-                            <input type="date" className="w-full bg-gray-50 border border-gray-200 text-gray-700 text-xs rounded-lg p-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none" />
+                            <input 
+                                type="date" 
+                                value={endDate}
+                                onChange={(e) => setEndDate(e.target.value)}
+                                className="w-full bg-gray-50 border border-gray-200 text-gray-700 text-xs rounded-lg p-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none" 
+                            />
                         </div>
                         <div className="pt-2 flex gap-2">
                             <button 
