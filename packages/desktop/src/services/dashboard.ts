@@ -11,8 +11,14 @@ export interface ResidentDemographics {
   female: number;
 }
 
+export interface Personnel {
+  id: string;
+  name: string;
+}
+
 export interface Transaction {
   id: string;
+  documentId: string;
   orNumber: string;
   orderDate: string;
   amount: number;
@@ -36,10 +42,14 @@ export const dashboardService = {
       `/dashboard/resident-demographics${qs ? `?${qs}` : ""}`
     );
   },
+  getPersonnel: (): Promise<Personnel[]> => {
+    return api.get<Personnel[]>("/dashboard/personnel");
+  },
   getTransactions: (params: {
     period?: string;
     from?: string;
     to?: string;
+    personnelId?: string;
     page?: number;
     pageSize?: number;
   }) => {
@@ -47,6 +57,7 @@ export const dashboardService = {
     if (params.period) searchParams.set("period", params.period);
     if (params.from) searchParams.set("from", params.from);
     if (params.to) searchParams.set("to", params.to);
+    if (params.personnelId) searchParams.set("personnelId", params.personnelId);
     if (params.page) searchParams.set("page", params.page.toString());
     if (params.pageSize) searchParams.set("pageSize", params.pageSize.toString());
     const qs = searchParams.toString();

@@ -1,7 +1,8 @@
 import React, { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import { Search, ChevronDown, ChevronRight, ChevronLeft, Calendar, Coins, FileText } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
-import { dashboardService } from '@/services/dashboard';
+import { dashboardService, Transaction, Personnel } from '@/services/dashboard';
+import TransactionViewModal from '@/components/ui/TransactionViewModal';
 
 interface SummaryCardProps {
   title: string;
@@ -33,6 +34,7 @@ const TransactionSection: React.FC = () => {
   // Personnel Dropdown State
   const [isPersonnelDropdownOpen, setIsPersonnelDropdownOpen] = useState(false);
   const [selectedPersonnel, setSelectedPersonnel] = useState('All');
+  const [selectedPersonnelId, setSelectedPersonnelId] = useState('All');
   const personnelDropdownRef = useRef<HTMLDivElement>(null);
   
   // Dynamic Table Layout State
@@ -41,10 +43,21 @@ const TransactionSection: React.FC = () => {
   const containerRef = useRef<HTMLDivElement>(null);
   const headerRef = useRef<HTMLTableSectionElement>(null);
 
+  // Transaction View Modal State
+  const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
+  const [isViewModalOpen, setIsViewModalOpen] = useState(false);
+
+  // Fetch personnel from API
+  const { data: personnelData } = useQuery({
+    queryKey: ['personnel'],
+    queryFn: () => dashboardService.getPersonnel(),
+  });
+
   const { data, isLoading } = useQuery({
-    queryKey: ['transactions', { period: activeTab, page: currentPage }],
+    queryKey: ['transactions', { period: activeTab, page: currentPage, personnelId: selectedPersonnelId }],
     queryFn: () => dashboardService.getTransactions({
       period: activeTab === 'Custom' ? undefined : activeTab.toLowerCase(),
+      personnelId: selectedPersonnelId === 'All' ? undefined : selectedPersonnelId,
       page: currentPage,
       pageSize: itemsPerPage,
     }),
@@ -130,6 +143,16 @@ const TransactionSection: React.FC = () => {
     }
   };
 
+  const handleViewTransaction = (transaction: Transaction) => {
+    setSelectedTransaction(transaction);
+    setIsViewModalOpen(true);
+  };
+
+  const handleCloseViewModal = () => {
+    setIsViewModalOpen(false);
+    setSelectedTransaction(null);
+  };
+
   return (
     <div className="grid grid-cols-12 gap-[clamp(1rem,1.5vw,1.5rem)]">
       {/* Left Column - Controls & Summary Container */}
@@ -209,16 +232,27 @@ const TransactionSection: React.FC = () => {
                   
                   {/* Custom Dropdown Menu */}
                   <div className={`absolute top-full left-0 mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-xl p-1 z-50 transition-all duration-200 origin-top ${isPersonnelDropdownOpen ? 'opacity-100 scale-100 visible' : 'opacity-0 scale-95 invisible'}`}>
-                      {['All', 'Nayeon', 'Sana'].map((person) => (
+                      <button
+                          onClick={() => {
+                              setSelectedPersonnel('All');
+                              setSelectedPersonnelId('All');
+                              setIsPersonnelDropdownOpen(false);
+                          }}
+                          className={`w-full text-left px-3 py-2 text-[11px] font-medium rounded-lg transition-colors ${selectedPersonnel === 'All' ? 'bg-blue-50 text-blue-600' : 'text-gray-700 hover:bg-gray-50'}`}
+                      >
+                          All
+                      </button>
+                      {personnelData?.map((person) => (
                           <button
-                              key={person}
+                              key={person.id}
                               onClick={() => {
-                                  setSelectedPersonnel(person);
+                                  setSelectedPersonnel(person.name);
+                                  setSelectedPersonnelId(person.id);
                                   setIsPersonnelDropdownOpen(false);
                               }}
-                              className={`w-full text-left px-3 py-2 text-[11px] font-medium rounded-lg transition-colors ${selectedPersonnel === person ? 'bg-blue-50 text-blue-600' : 'text-gray-700 hover:bg-gray-50'}`}
+                              className={`w-full text-left px-3 py-2 text-[11px] font-medium rounded-lg transition-colors ${selectedPersonnel === person.name ? 'bg-blue-50 text-blue-600' : 'text-gray-700 hover:bg-gray-50'}`}
                           >
-                              {person}
+                              {person.name}
                           </button>
                       ))}
                   </div>
@@ -290,7 +324,10 @@ const TransactionSection: React.FC = () => {
                     <td className="px-3 xl:px-4 text-[11px] xl:text-[13px] text-gray-600 truncate" title={t.documentType}>{t.documentType}</td>
                     <td className="px-3 xl:px-4 text-[11px] xl:text-[13px] text-gray-900 font-bold truncate">₱{t.amount}</td>
                     <td className="px-3 xl:px-4 text-center">
-                      <button className="text-blue-500 border-2 border-blue-500 rounded-full px-3 xl:px-4 py-1 text-[10px] xl:text-[11px] font-bold hover:bg-blue-50 transition-colors">
+                      <button
+                        onClick={() => handleViewTransaction(t)}
+                        className="text-blue-500 border-2 border-blue-500 rounded-full px-3 xl:px-4 py-1 text-[10px] xl:text-[11px] font-bold hover:bg-blue-50 transition-colors"
+                      >
                         View
                       </button>
                     </td>
@@ -345,6 +382,13 @@ const TransactionSection: React.FC = () => {
 
         </div>
       </div>
+
+      {/* Transaction View Modal */}
+      <TransactionViewModal
+        isOpen={isViewModalOpen}
+        onClose={handleCloseViewModal}
+        transaction={selectedTransaction}
+      />
     </div>
   );
 };

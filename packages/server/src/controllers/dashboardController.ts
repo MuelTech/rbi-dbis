@@ -1,6 +1,35 @@
 import type { Request, Response, NextFunction } from "express";
 import { prisma, Prisma } from "@rbi/db";
 
+export async function getPersonnel(
+  _req: Request,
+  res: Response,
+  next: NextFunction
+) {
+  try {
+    // Get all active users who can process documents
+    const personnel = await prisma.user.findMany({
+      where: {
+        isActive: true,
+      },
+      include: {
+        userInfo: true,
+      },
+    });
+
+    const data = personnel.map((user) => ({
+      id: user.id,
+      name: user.userInfo
+        ? `${user.userInfo.firstName} ${user.userInfo.lastName}`
+        : user.username,
+    }));
+
+    res.json(data);
+  } catch (err) {
+    next(err);
+  }
+}
+
 export async function getResidentDemographics(
   req: Request,
   res: Response,
@@ -100,6 +129,7 @@ export async function getTransactions(
     const period = (req.query.period as string) || "month";
     const from = req.query.from as string;
     const to = req.query.to as string;
+    const personnelId = req.query.personnelId as string;
     const page = Math.max(1, parseInt(req.query.page as string) || 1);
     const pageSize = Math.max(1, Math.min(100, parseInt(req.query.pageSize as string) || 20));
 
@@ -117,12 +147,17 @@ export async function getTransactions(
       startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
     }
 
-    const where = {
+    const where: any = {
       orderDate: {
         gte: startDate,
         lte: now,
       },
     };
+
+    // Filter by personnel if specified
+    if (personnelId && personnelId !== 'All') {
+      where.userId = personnelId;
+    }
 
     const skip = (page - 1) * pageSize;
 
@@ -152,6 +187,7 @@ export async function getTransactions(
 
     const data = orders.map((order) => ({
       id: order.id,
+      documentId: order.documentId,
       orNumber: order.orNumber,
       orderDate: order.orderDate,
       amount: Number(order.amount),

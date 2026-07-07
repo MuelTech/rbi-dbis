@@ -165,5 +165,5 @@ export const documentConfigs: DocumentConfig[] = [
 ];
 
 export const getDocumentConfig = (name: string): DocumentConfig | undefined => {
-  return documentConfigs.find(doc => doc.name === name);
+  return documentConfigs.find(doc => doc.name.toLowerCase() === name.toLowerCase());
 };
