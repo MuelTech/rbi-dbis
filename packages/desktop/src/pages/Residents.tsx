@@ -8,6 +8,9 @@ import AddResidentForm from '@/components/forms/AddResidentForm';
 import BatchImportModal from '@/components/ui/BatchImportModal';
 import SuccessToast from '@/components/ui/SuccessToast';
 import { residentsService } from '@/services/residents';
+import { useAuth } from '@/context/AuthContext';
+import { reportService } from '@/services/report';
+import { generateResidentReport } from '@/utils/pdfGenerator';
 
 
 interface ResidentsProps {
@@ -17,6 +20,7 @@ interface ResidentsProps {
 
 const Residents: React.FC<ResidentsProps> = ({ setIsNavigationBlocked, onShowSuccess }) => {
     const queryClient = useQueryClient();
+    const { user } = useAuth();
     const [viewMode, setViewMode] = useState<'list' | 'add'>('list');
     const [currentPage, setCurrentPage] = useState(1);
     const [isAgeAccordionOpen, setIsAgeAccordionOpen] = useState(false);
@@ -128,6 +132,35 @@ const Residents: React.FC<ResidentsProps> = ({ setIsNavigationBlocked, onShowSuc
     const handleApplyFilters = () => {
         setActiveFilters(tempFilters);
         setIsFilterMenuOpen(false);
+    };
+
+    // PDF Report Handler
+    const handleGeneratePDF = async () => {
+        try {
+            // Build filters from active page filters
+            const filters: any = {};
+
+            if (activeFilters.sex.length > 0) {
+                filters.sex = activeFilters.sex[0];
+            }
+            if (activeFilters.voter.includes('Voter')) {
+                filters.isVoter = 'true';
+            } else if (activeFilters.voter.includes('Non-Voter')) {
+                filters.isVoter = 'false';
+            }
+            if (selectedStatuses.length > 0 && selectedStatuses.length < 3) {
+                filters.status = selectedStatuses[0] === 'Active' ? 'Alive' : selectedStatuses[0];
+            }
+
+            const result = await reportService.getFilteredResidents(filters);
+            generateResidentReport({
+                title: `List of Residents - ${new Date().toLocaleDateString()}`,
+                data: result.data,
+                generatedBy: user ? `${user.firstName} ${user.lastName}` : 'Unknown',
+            });
+        } catch (err) {
+            alert('Failed to generate report');
+        }
     };
 
     const [itemsPerPage, setItemsPerPage] = useState(10);
@@ -464,7 +497,10 @@ const Residents: React.FC<ResidentsProps> = ({ setIsNavigationBlocked, onShowSuc
 
                 <div className="flex items-center gap-3 w-full lg:w-auto">
                     <button className="bg-[#22C55E] hover:bg-green-600 text-white px-4 py-2 rounded-xl text-[12px] font-bold tracking-widest transition-all uppercase">CSV</button>
-                    <button className="bg-[#EF4444] hover:bg-red-600 text-white px-4 py-2 rounded-xl text-[12px] font-bold tracking-widest transition-all uppercase">PDF</button>
+                    <button
+                        onClick={handleGeneratePDF}
+                        className="bg-[#EF4444] hover:bg-red-600 text-white px-4 py-2 rounded-xl text-[12px] font-bold tracking-widest transition-all uppercase"
+                    >PDF</button>
                     <div className="relative flex-1 lg:flex-none">
                         <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-blue-300 w-4 h-4" />
                         <input
@@ -636,6 +672,7 @@ const Residents: React.FC<ResidentsProps> = ({ setIsNavigationBlocked, onShowSuc
                 isVisible={showToast}
                 onClose={() => setShowToast(false)}
             />
+
         </>
     );
 };
