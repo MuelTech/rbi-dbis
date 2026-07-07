@@ -13,6 +13,7 @@ import { familyRouter } from "./routes/families.js";
 import { dashboardRouter } from "./routes/dashboard.js";
 import { archivedRouter } from "./routes/archived.js";
 import { settingsRouter } from "./routes/settings.js";
+import { reportRouter } from "./routes/report.js";
 import { errorHandler } from "./middleware/errorHandler.js";
 
 const app = express();
@@ -38,6 +39,7 @@ app.use("/api/families", requireAuth, familyRouter);
 app.use("/api/archived-families", requireAuth, archivedRouter);
 app.use("/api/dashboard", requireAuth, dashboardRouter);
 app.use("/api/settings", requireAuth, settingsRouter);
+app.use("/api/report", requireAuth, reportRouter);
 
 app.use(errorHandler);
 
