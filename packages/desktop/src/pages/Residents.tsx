@@ -11,6 +11,7 @@ import { residentsService } from '@/services/residents';
 import { useAuth } from '@/context/AuthContext';
 import { reportService } from '@/services/report';
 import { generateResidentReport } from '@/utils/pdfGenerator';
+import * as XLSX from 'xlsx';
 
 
 interface ResidentsProps {
@@ -160,6 +161,58 @@ const Residents: React.FC<ResidentsProps> = ({ setIsNavigationBlocked, onShowSuc
             });
         } catch (err) {
             alert('Failed to generate report');
+        }
+    };
+
+    const handleGenerateCSV = async () => {
+        try {
+            // Build filters from active page filters
+            const filters: any = {};
+
+            if (activeFilters.sex.length > 0) {
+                filters.sex = activeFilters.sex[0];
+            }
+            if (activeFilters.voter.includes('Voter')) {
+                filters.isVoter = 'true';
+            } else if (activeFilters.voter.includes('Non-Voter')) {
+                filters.isVoter = 'false';
+            }
+            if (selectedStatuses.length > 0 && selectedStatuses.length < 3) {
+                filters.status = selectedStatuses[0] === 'Active' ? 'Alive' : selectedStatuses[0];
+            }
+
+            const result = await reportService.getFilteredResidents(filters);
+
+            // Prepare data for CSV
+            const csvData = result.data.map((r) => ({
+                'No.': r.no,
+                'Name': `${r.lastName}, ${r.firstName} ${r.middleName}`,
+                'Sex': r.sex,
+                'Address': r.address,
+                'Contact': r.contact,
+                'Status': r.status,
+            }));
+
+            // Create workbook
+            const wb = XLSX.utils.book_new();
+            const ws = XLSX.utils.json_to_sheet(csvData);
+
+            // Set column widths
+            ws['!cols'] = [
+                { wch: 5 },   // No.
+                { wch: 40 },  // Name
+                { wch: 8 },   // Sex
+                { wch: 50 },  // Address
+                { wch: 15 },  // Contact
+                { wch: 12 },  // Status
+            ];
+
+            XLSX.utils.book_append_sheet(wb, ws, 'Residents');
+
+            // Download
+            XLSX.writeFile(wb, `Residents_${new Date().toISOString().split('T')[0]}.csv`);
+        } catch (err) {
+            alert('Failed to generate CSV');
         }
     };
 
@@ -496,7 +549,10 @@ const Residents: React.FC<ResidentsProps> = ({ setIsNavigationBlocked, onShowSuc
                 </div>
 
                 <div className="flex items-center gap-3 w-full lg:w-auto">
-                    <button className="bg-[#22C55E] hover:bg-green-600 text-white px-4 py-2 rounded-xl text-[12px] font-bold tracking-widest transition-all uppercase">CSV</button>
+                    <button
+                        onClick={handleGenerateCSV}
+                        className="bg-[#22C55E] hover:bg-green-600 text-white px-4 py-2 rounded-xl text-[12px] font-bold tracking-widest transition-all uppercase"
+                    >CSV</button>
                     <button
                         onClick={handleGeneratePDF}
                         className="bg-[#EF4444] hover:bg-red-600 text-white px-4 py-2 rounded-xl text-[12px] font-bold tracking-widest transition-all uppercase"
