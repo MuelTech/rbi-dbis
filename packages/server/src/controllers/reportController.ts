@@ -1,5 +1,6 @@
 import type { Request, Response, NextFunction } from "express";
 import { prisma, Prisma } from "@rbi/db";
+import { logAction } from "../services/auditService.js";
 
 export async function getFilteredResidents(
   req: Request,
@@ -7,6 +8,7 @@ export async function getFilteredResidents(
   next: NextFunction
 ) {
   try {
+    const userId = req.user?.id;
     const sex = req.query.sex as string;
     const isVoter = req.query.isVoter as string;
     const isPwd = req.query.isPwd as string;
@@ -88,6 +90,23 @@ export async function getFilteredResidents(
         status: r.statusType,
       };
     });
+
+    // Log the report generation
+    if (userId) {
+      const filters = Object.entries({ sex, isVoter, isPwd, isSoloParent, isFamilyHead, studentType, status })
+        .filter(([_, v]) => v)
+        .map(([k, v]) => `${k}=${v}`)
+        .join(", ");
+      
+      await logAction(
+        "reports",
+        "resident-list",
+        userId,
+        "CREATE",
+        null,
+        `Generated resident report (${data.length} records)${filters ? ` with filters: ${filters}` : ""}`
+      );
+    }
 
     res.json({ data, total: data.length });
   } catch (err) {
