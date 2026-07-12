@@ -230,7 +230,7 @@ const TransactionSection: React.FC = () => {
         t.personnel,
         t.resident,
         t.documentType,
-        `₱${t.amount}`,
+        `PHP ${t.amount}`,
     ]);
 
     autoTable(doc, {
@@ -255,7 +255,7 @@ const TransactionSection: React.FC = () => {
     doc.setFontSize(10);
     doc.setFont(undefined, 'bold');
     doc.text(`Total Transactions: ${summary.totalTransactions}`, 10, finalY + 10);
-    doc.text(`Accumulated Fee: ₱${summary.accumulatedFee.toLocaleString()}`, 10, finalY + 16);
+    doc.text(`Accumulated Fee: PHP ${summary.accumulatedFee.toLocaleString()}`, 10, finalY + 16);
 
     // Footer
     const pageCount = doc.getNumberOfPages();

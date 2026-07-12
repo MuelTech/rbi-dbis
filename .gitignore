@@ -29,6 +29,7 @@ dist-ssr
 *.sw?
 .agent/
 .agents/
+.mimocode/
 /docs
 # Electron build output
 out/
