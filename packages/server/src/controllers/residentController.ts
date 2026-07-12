@@ -1,6 +1,6 @@
 import type { Request, Response, NextFunction } from "express";
 import { prisma, Prisma } from "@rbi/db";
-import { logCreate, logUpdate, logArchive } from "../services/auditService.js";
+import { logCreate, logUpdate, logArchive, logAction } from "../services/auditService.js";
 
 const STATUS_MAP_TO_DB: Record<string, string> = {
   Active: "Alive",
@@ -603,6 +603,19 @@ export async function batchImportResidents(
       } catch (err: any) {
         errors.push(`Family ${fam.head?.last_name ?? "unknown"}: ${err.message}`);
       }
+    }
+
+    // Log batch import
+    const userId = req.user?.id;
+    if (userId) {
+      await logAction(
+        "residents",
+        "batch-import",
+        userId,
+        "CREATE",
+        null,
+        `Batch import: ${totalCreated} created, ${totalUpdated} updated, ${totalSkipped} skipped, ${errors.length} errors`
+      );
     }
 
     res.json({
