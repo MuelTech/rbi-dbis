@@ -239,11 +239,8 @@ const TransactionSection: React.FC = () => {
       doc.setFontSize(14);
       doc.text('Document Transactions Report', pageWidth / 2, 45, { align: 'center' });
 
-      doc.setFontSize(10);
-      doc.text(`Period: ${activeTab}`, 10, 55);
-      doc.text(`Personnel: ${selectedPersonnel}`, 10, 60);
-
-      const tableData = exportData.data.map((t) => [
+      const tableData = exportData.data.map((t, index) => [
+        index + 1,
         t.orNumber,
         new Date(t.orderDate).toLocaleDateString('en-GB'),
         t.personnel,
@@ -253,20 +250,17 @@ const TransactionSection: React.FC = () => {
       ]);
 
       autoTable(doc, {
-        startY: 70,
-        head: [['OR Number', 'Date', 'Personnel', 'Resident', 'Type', 'Fee']],
+        startY: 55,
+        head: [['No.', 'OR Number', 'Date', 'Personnel', 'Resident', 'Type', 'Fee']],
         body: tableData,
-        styles: { fontSize: 8, cellPadding: 2 },
-        headStyles: { fillColor: [41, 128, 185], textColor: 255, fontStyle: 'bold' },
+        styles: { fontSize: 10, cellPadding: 4, halign: 'center', valign: 'middle' },
+        headStyles: { fillColor: [41, 128, 185], textColor: 255, fontStyle: 'bold', halign: 'center', valign: 'middle' },
         columnStyles: {
-          0: { cellWidth: 25 },
-          1: { cellWidth: 20 },
-          2: { cellWidth: 30 },
-          3: { cellWidth: 35 },
-          4: { cellWidth: 35 },
-          5: { cellWidth: 15 },
+          0: { cellWidth: 12 },
         },
-        margin: { top: 70, left: 10, right: 10 },
+        margin: { top: 25, left: 15, right: 15 },
+        tableWidth: 'auto',
+        showHead: 'everyPage',
       });
 
       const finalY = (doc as any).lastAutoTable?.finalY || 200;
