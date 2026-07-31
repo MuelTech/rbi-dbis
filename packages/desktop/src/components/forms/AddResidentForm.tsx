@@ -275,9 +275,20 @@ const AddResidentForm: React.FC<AddResidentFormProps> = ({ onCancel, setIsNaviga
         ));
     };
 
+    const validateName = (value: string): boolean => {
+        if (!value || value.trim() === '') return true;
+        return /^[A-Za-z\s\-'.]+$/.test(value.trim());
+    };
+
+    const validatePhone = (value: string): boolean => {
+        if (!value || value.trim() === '') return true;
+        const cleaned = value.replace(/[\s\-()]/g, '');
+        return /^09\d{9}$/.test(cleaned);
+    };
+
     const validateStep = (step: number) => {
         const newErrors: Record<string, string> = {};
-        
+
         if (step === 1) {
             if (!formData.block) newErrors.block = 'Block is required';
             if (!formData.householdNumber) newErrors.householdNumber = 'Household Number is required';
@@ -299,26 +310,39 @@ const AddResidentForm: React.FC<AddResidentFormProps> = ({ onCancel, setIsNaviga
             }
         } else if (step === 2) {
             if (!formData.headFirstName) newErrors.headFirstName = 'First Name is required';
+            else if (!validateName(formData.headFirstName)) newErrors.headFirstName = 'First Name should only contain letters';
+
             if (!formData.headLastName) newErrors.headLastName = 'Last Name is required';
+            else if (!validateName(formData.headLastName)) newErrors.headLastName = 'Last Name should only contain letters';
+
             if (!formData.headBirthDate) newErrors.headBirthDate = 'Date of Birth is required';
             if (!formData.headCivilStatus) newErrors.headCivilStatus = 'Civil Status is required';
             if (!formData.headSex) newErrors.headSex = 'Sex is required';
             if (!formData.headOccupation) newErrors.headOccupation = 'Occupation is required';
+
             if (!formData.headContactNumber) newErrors.headContactNumber = 'Contact Number is required';
-            
+            else if (!validatePhone(formData.headContactNumber)) newErrors.headContactNumber = 'Contact Number must be 11 digits starting with 09';
+
             if (formData.headIsStudent === 'Yes') {
                 if (!formData.headEducationLevel) newErrors.headEducationLevel = 'Education Level is required';
             }
         } else if (step === 3) {
             familyMembers.forEach((member) => {
                 if (!member.relationship) newErrors[`member_${member.id}_relationship`] = 'Relationship is required';
+
                 if (!member.firstName) newErrors[`member_${member.id}_firstName`] = 'First Name is required';
+                else if (!validateName(member.firstName)) newErrors[`member_${member.id}_firstName`] = 'First Name should only contain letters';
+
                 if (!member.lastName) newErrors[`member_${member.id}_lastName`] = 'Last Name is required';
+                else if (!validateName(member.lastName)) newErrors[`member_${member.id}_lastName`] = 'Last Name should only contain letters';
+
                 if (!member.birthDate) newErrors[`member_${member.id}_birthDate`] = 'Date of Birth is required';
                 if (!member.civilStatus) newErrors[`member_${member.id}_civilStatus`] = 'Civil Status is required';
                 if (!member.sex) newErrors[`member_${member.id}_sex`] = 'Sex is required';
                 if (!member.occupation) newErrors[`member_${member.id}_occupation`] = 'Occupation is required';
+
                 if (!member.contactNumber) newErrors[`member_${member.id}_contactNumber`] = 'Contact Number is required';
+                else if (!validatePhone(member.contactNumber)) newErrors[`member_${member.id}_contactNumber`] = 'Contact Number must be 11 digits starting with 09';
 
                 if (member.isStudent === 'Yes') {
                     if (!member.educationLevel) newErrors[`member_${member.id}_educationLevel`] = 'Education Level is required';
@@ -745,8 +769,9 @@ const AddResidentForm: React.FC<AddResidentFormProps> = ({ onCancel, setIsNaviga
                                     </div>
                                     <div className="space-y-2">
                                         <label className="text-[13px] font-bold text-gray-700">Contact Number <span className="text-red-500">*</span></label>
-                                        <input 
+                                        <input
                                             type="text"
+                                            maxLength={11}
                                             className={`w-full px-4 py-2.5 bg-white border ${errors.headContactNumber ? 'border-red-500' : 'border-gray-200'} rounded-xl text-[14px] text-gray-700 focus:outline-none focus:ring-2 focus:ring-green-500/20 focus:border-green-500 transition-all`}
                                             value={formData.headContactNumber}
                                             onChange={(e) => setFormData({...formData, headContactNumber: e.target.value})}
@@ -1047,8 +1072,9 @@ const AddResidentForm: React.FC<AddResidentFormProps> = ({ onCancel, setIsNaviga
                                                             </div>
                                                             <div className="space-y-2">
                                                                 <label className="text-[13px] font-bold text-gray-700">Contact Number <span className="text-red-500">*</span></label>
-                                                                <input 
+                                                                <input
                                                                     type="text"
+                                                                    maxLength={11}
                                                                     className={`w-full px-4 py-2.5 bg-white border ${errors[`member_${member.id}_contactNumber`] ? 'border-red-500' : 'border-gray-200'} rounded-xl text-[14px] text-gray-700 focus:outline-none focus:ring-2 focus:ring-green-500/20 focus:border-green-500 transition-all`}
                                                                     value={member.contactNumber}
                                                                     onChange={(e) => updateFamilyMember(member.id, 'contactNumber', e.target.value)}
