@@ -149,6 +149,14 @@ const Document: React.FC<DocumentProps> = ({ setIsNavigationBlocked }) => {
 
     setFormData(initialData);
 
+    // Fetch OR Number for preview
+    try {
+      const { orNumber } = await documentsService.getNextOrNumber();
+      setFormData(prev => ({ ...prev, orNumber }));
+    } catch {
+      // OR Number fetch failed - will show N/A
+    }
+
     // Fetch previous document for pre-fill
     try {
       const lastDoc = await documentsService.getLastDocument(

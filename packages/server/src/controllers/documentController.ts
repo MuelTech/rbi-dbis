@@ -2,6 +2,33 @@ import type { Request, Response, NextFunction } from "express";
 import { prisma } from "@rbi/db";
 import { logCreate } from "../services/auditService.js";
 
+export async function getNextOrNumber(
+  _req: Request,
+  res: Response,
+  next: NextFunction
+) {
+  try {
+    const currentYear = new Date().getFullYear();
+    const lastOrder = await prisma.order.findFirst({
+      orderBy: { createdAt: "desc" },
+      select: { orNumber: true },
+    });
+
+    let orSequence = 1;
+    if (lastOrder) {
+      const parts = lastOrder.orNumber.split("-");
+      if (parts.length === 3 && parts[0] === String(currentYear)) {
+        orSequence = parseInt(parts[2], 10) + 1;
+      }
+    }
+    const orNumber = `${currentYear}-418-${String(orSequence).padStart(5, "0")}`;
+
+    res.json({ orNumber });
+  } catch (err) {
+    next(err);
+  }
+}
+
 export async function getDocumentTypes(
   _req: Request,
   res: Response,

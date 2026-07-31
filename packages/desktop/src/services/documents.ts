@@ -56,4 +56,7 @@ export const documentsService = {
     });
     return api.get(`/documents/last?${params.toString()}`);
   },
+  getNextOrNumber: (): Promise<{ orNumber: string }> => {
+    return api.get("/documents/next-or-number");
+  },
 };
