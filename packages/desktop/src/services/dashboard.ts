@@ -65,4 +65,18 @@ export const dashboardService = {
     const qs = searchParams.toString();
     return api.get<TransactionResponse>(`/dashboard/transactions${qs ? `?${qs}` : ""}`);
   },
+  getTransactionsExport: (params: {
+    period?: string;
+    from?: string;
+    to?: string;
+    personnelId?: string;
+  }) => {
+    const searchParams = new URLSearchParams();
+    if (params.period) searchParams.set("period", params.period);
+    if (params.from) searchParams.set("from", params.from);
+    if (params.to) searchParams.set("to", params.to);
+    if (params.personnelId) searchParams.set("personnelId", params.personnelId);
+    const qs = searchParams.toString();
+    return api.get<TransactionResponse>(`/dashboard/transactions/export${qs ? `?${qs}` : ""}`);
+  },
 };
