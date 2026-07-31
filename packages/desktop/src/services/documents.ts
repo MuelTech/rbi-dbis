@@ -41,4 +41,19 @@ export const documentsService = {
   getById: (id: string) => api.get<DocumentRecord>(`/documents/${id}`),
   create: (data: CreateDocumentPayload) =>
     api.post<DocumentRecord>("/documents", data),
+  getLastDocument: async (
+    residentId: string,
+    documentTypeId: string
+  ): Promise<{
+    id: string;
+    formData: Record<string, any> | null;
+    purpose: string | null;
+    issueDate: string;
+  } | null> => {
+    const params = new URLSearchParams({
+      residentId,
+      documentTypeId,
+    });
+    return api.get(`/documents/last?${params.toString()}`);
+  },
 };
