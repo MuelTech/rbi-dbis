@@ -32,6 +32,15 @@ const Document: React.FC<DocumentProps> = ({ setIsNavigationBlocked }) => {
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [isIssuing, setIsIssuing] = useState(false);
 
+  // Pre-fill State
+  const [previousDocumentData, setPreviousDocumentData] = useState<{
+    id: string;
+    formData: Record<string, any> | null;
+    purpose: string | null;
+    issueDate: string;
+  } | null>(null);
+  const [showPrefillBanner, setShowPrefillBanner] = useState(false);
+
   const resetForm = () => {
     setSearchQuery('');
     setSelectedResident('');
@@ -89,7 +98,7 @@ const Document: React.FC<DocumentProps> = ({ setIsNavigationBlocked }) => {
     ), [residents, searchQuery]
   );
 
-  const handleProceed = () => {
+  const handleProceed = async () => {
     const config = getDocumentConfig(documentType);
     if (!config) {
       alert('Configuration not found.');
@@ -139,6 +148,25 @@ const Document: React.FC<DocumentProps> = ({ setIsNavigationBlocked }) => {
     });
 
     setFormData(initialData);
+
+    // Fetch previous document for pre-fill
+    try {
+      const lastDoc = await documentsService.getLastDocument(
+        selectedResidentId,
+        dbDocType.id
+      );
+      if (lastDoc && lastDoc.formData) {
+        setPreviousDocumentData(lastDoc);
+        setShowPrefillBanner(true);
+      } else {
+        setPreviousDocumentData(null);
+        setShowPrefillBanner(false);
+      }
+    } catch {
+      setPreviousDocumentData(null);
+      setShowPrefillBanner(false);
+    }
+
     setStep(2);
   };
 
@@ -146,6 +174,8 @@ const Document: React.FC<DocumentProps> = ({ setIsNavigationBlocked }) => {
     setStep(1);
     setActiveConfig(null);
     setFormData({});
+    setPreviousDocumentData(null);
+    setShowPrefillBanner(false);
   };
 
   const handleInputChange = (key: string, value: any) => {
@@ -153,6 +183,16 @@ const Document: React.FC<DocumentProps> = ({ setIsNavigationBlocked }) => {
       ...prev,
       [key]: value
     }));
+  };
+
+  const handleUsePreviousData = () => {
+    if (previousDocumentData?.formData) {
+      setFormData(prev => ({
+        ...prev,
+        ...previousDocumentData.formData,
+      }));
+    }
+    setShowPrefillBanner(false);
   };
 
   const handlePrint = () => {
@@ -398,6 +438,28 @@ const Document: React.FC<DocumentProps> = ({ setIsNavigationBlocked }) => {
                             )}
                         </div>
                     </div>
+
+                    {showPrefillBanner && previousDocumentData && (
+                      <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-xl flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <FileText size={20} className="text-blue-600" />
+                          <div>
+                            <p className="text-sm font-medium text-blue-900">
+                              Previous {documentType} found
+                            </p>
+                            <p className="text-xs text-blue-600">
+                              Issued on {new Date(previousDocumentData.issueDate).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
+                            </p>
+                          </div>
+                        </div>
+                        <button
+                          onClick={handleUsePreviousData}
+                          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors"
+                        >
+                          Use Previous Data
+                        </button>
+                      </div>
+                    )}
 
                     {/* Dynamic Form Fields */}
                     <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm flex-1">
