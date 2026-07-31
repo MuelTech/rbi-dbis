@@ -50,6 +50,7 @@ export const dashboardService = {
     from?: string;
     to?: string;
     personnelId?: string;
+    search?: string;
     page?: number;
     pageSize?: number;
   }) => {
@@ -58,6 +59,7 @@ export const dashboardService = {
     if (params.from) searchParams.set("from", params.from);
     if (params.to) searchParams.set("to", params.to);
     if (params.personnelId) searchParams.set("personnelId", params.personnelId);
+    if (params.search) searchParams.set("search", params.search);
     if (params.page) searchParams.set("page", params.page.toString());
     if (params.pageSize) searchParams.set("pageSize", params.pageSize.toString());
     const qs = searchParams.toString();

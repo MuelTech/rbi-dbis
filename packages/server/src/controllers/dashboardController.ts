@@ -130,6 +130,7 @@ export async function getTransactions(
     const from = req.query.from as string;
     const to = req.query.to as string;
     const personnelId = req.query.personnelId as string;
+    const search = (req.query.search as string)?.trim() || "";
     const page = Math.max(1, parseInt(req.query.page as string) || 1);
     const pageSize = Math.max(1, Math.min(100, parseInt(req.query.pageSize as string) || 20));
 
@@ -147,12 +148,27 @@ export async function getTransactions(
       startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
     }
 
-    const where: any = {
-      orderDate: {
+    const where: any = {};
+
+    // Only apply period filter when NOT searching
+    if (!search) {
+      where.orderDate = {
         gte: startDate,
         lte: now,
-      },
-    };
+      };
+    }
+
+    // Add search filter (searches across ALL transactions)
+    if (search) {
+      where.OR = [
+        { orNumber: { contains: search } },
+        { resident: { firstName: { contains: search } } },
+        { resident: { lastName: { contains: search } } },
+        { user: { userInfo: { firstName: { contains: search } } } },
+        { user: { userInfo: { lastName: { contains: search } } } },
+        { document: { documentType: { documentName: { contains: search } } } },
+      ];
+    }
 
     // Filter by personnel if specified
     if (personnelId && personnelId !== 'All') {

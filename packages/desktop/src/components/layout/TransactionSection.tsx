@@ -33,6 +33,7 @@ const TransactionSection: React.FC = () => {
   const [activeTab, setActiveTab] = useState('Day');
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
+  const [searchQuery, setSearchQuery] = useState('');
   const datePickerRef = useRef<HTMLDivElement>(null);
   
   // Date Range State
@@ -64,12 +65,13 @@ const TransactionSection: React.FC = () => {
   });
 
   const { data, isLoading } = useQuery({
-    queryKey: ['transactions', { period: activeTab, page: currentPage, personnelId: selectedPersonnelId, startDate, endDate }],
+    queryKey: ['transactions', { period: activeTab, page: currentPage, personnelId: selectedPersonnelId, startDate, endDate, searchQuery }],
     queryFn: () => dashboardService.getTransactions({
       period: activeTab === 'Custom' ? undefined : activeTab.toLowerCase(),
       personnelId: selectedPersonnelId === 'All' ? undefined : selectedPersonnelId,
       from: activeTab === 'Custom' ? startDate : undefined,
       to: activeTab === 'Custom' ? endDate : undefined,
+      search: searchQuery || undefined,
       page: currentPage,
       pageSize: itemsPerPage,
     }),
@@ -419,9 +421,14 @@ const TransactionSection: React.FC = () => {
               <button onClick={handleExportPDF} className="bg-red-500 hover:bg-red-600 text-white px-3 xl:px-4 py-1.5 rounded-lg text-[9px] xl:text-[10px] font-bold transition-colors tracking-wide uppercase">PDF</button>
               <div className="relative ml-1">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-blue-300 w-3.5 h-3.5" />
-                <input 
-                  type="text" 
-                  placeholder="Search transactions.." 
+                <input
+                  type="text"
+                  placeholder="Search transactions.."
+                  value={searchQuery}
+                  onChange={(e) => {
+                    setSearchQuery(e.target.value);
+                    setCurrentPage(1);
+                  }}
                   className="pl-9 pr-3 py-1.5 xl:py-2 bg-gray-50 border-none rounded-xl text-[11px] xl:text-xs text-gray-700 placeholder-blue-300 focus:ring-1 focus:ring-blue-500 w-full sm:w-44 xl:w-56"
                 />
               </div>
