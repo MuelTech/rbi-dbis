@@ -55,6 +55,7 @@ const TransactionSection: React.FC = () => {
   // Transaction View Modal State
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
 
   const { user } = useAuth();
 
@@ -167,110 +168,127 @@ const TransactionSection: React.FC = () => {
     setSelectedTransaction(null);
   };
 
-  const handleExportCSV = () => {
-    const csvData = transactions.map((t) => ({
+  const handleExportCSV = async () => {
+    setIsExporting(true);
+    try {
+      const exportData = await dashboardService.getTransactionsExport({
+        period: activeTab === 'Custom' ? undefined : activeTab.toLowerCase(),
+        personnelId: selectedPersonnelId === 'All' ? undefined : selectedPersonnelId,
+        from: activeTab === 'Custom' ? startDate : undefined,
+        to: activeTab === 'Custom' ? endDate : undefined,
+      });
+
+      const csvData = exportData.data.map((t) => ({
         'OR Number': t.orNumber,
         'Date Issued': new Date(t.orderDate).toLocaleDateString('en-GB'),
         'Personnel': t.personnel,
         'Resident': t.resident,
         'Type': t.documentType,
         'Fee': t.amount,
-    }));
+      }));
 
-    // Add totals row
-    csvData.push({
+      csvData.push({
         'OR Number': '',
         'Date Issued': '',
         'Personnel': '',
         'Resident': 'TOTAL',
-        'Type': `${summary.totalTransactions} transactions`,
-        'Fee': summary.accumulatedFee,
-    });
+        'Type': `${exportData.summary.totalTransactions} transactions`,
+        'Fee': exportData.summary.accumulatedFee,
+      });
 
-    const wb = XLSX.utils.book_new();
-    const ws = XLSX.utils.json_to_sheet(csvData);
+      const wb = XLSX.utils.book_new();
+      const ws = XLSX.utils.json_to_sheet(csvData);
 
-    ws['!cols'] = [
+      ws['!cols'] = [
         { wch: 18 },
         { wch: 12 },
         { wch: 20 },
         { wch: 25 },
         { wch: 25 },
         { wch: 10 },
-    ];
+      ];
 
-    XLSX.utils.book_append_sheet(wb, ws, 'Transactions');
-    XLSX.writeFile(wb, `Transactions_${activeTab}_${new Date().toISOString().split('T')[0]}.csv`);
+      XLSX.utils.book_append_sheet(wb, ws, 'Transactions');
+      XLSX.writeFile(wb, `Transactions_${activeTab}_${new Date().toISOString().split('T')[0]}.csv`);
+    } finally {
+      setIsExporting(false);
+    }
   };
 
-  const handleExportPDF = () => {
-    const doc = new jsPDF('p', 'mm', 'a4');
-    const pageWidth = doc.internal.pageSize.width;
+  const handleExportPDF = async () => {
+    setIsExporting(true);
+    try {
+      const exportData = await dashboardService.getTransactionsExport({
+        period: activeTab === 'Custom' ? undefined : activeTab.toLowerCase(),
+        personnelId: selectedPersonnelId === 'All' ? undefined : selectedPersonnelId,
+        from: activeTab === 'Custom' ? startDate : undefined,
+        to: activeTab === 'Custom' ? endDate : undefined,
+      });
 
-    // Header
-    doc.setFontSize(10);
-    doc.text('Republic of the Philippines', pageWidth / 2, 15, { align: 'center' });
-    doc.text('City of Manila', pageWidth / 2, 20, { align: 'center' });
-    doc.setFontSize(12);
-    doc.text('BARANGAY 418 ZONE 43 DISTRICT IV', pageWidth / 2, 27, { align: 'center' });
-    doc.setFontSize(10);
-    doc.text('Office of the Barangay Chairman', pageWidth / 2, 32, { align: 'center' });
+      const doc = new jsPDF('p', 'mm', 'a4');
+      const pageWidth = doc.internal.pageSize.width;
 
-    // Title
-    doc.setFontSize(14);
-    doc.text('Document Transactions Report', pageWidth / 2, 45, { align: 'center' });
+      doc.setFontSize(10);
+      doc.text('Republic of the Philippines', pageWidth / 2, 15, { align: 'center' });
+      doc.text('City of Manila', pageWidth / 2, 20, { align: 'center' });
+      doc.setFontSize(12);
+      doc.text('BARANGAY 418 ZONE 43 DISTRICT IV', pageWidth / 2, 27, { align: 'center' });
+      doc.setFontSize(10);
+      doc.text('Office of the Barangay Chairman', pageWidth / 2, 32, { align: 'center' });
 
-    // Filter info
-    doc.setFontSize(10);
-    doc.text(`Period: ${activeTab}`, 10, 55);
-    doc.text(`Personnel: ${selectedPersonnel}`, 10, 60);
+      doc.setFontSize(14);
+      doc.text('Document Transactions Report', pageWidth / 2, 45, { align: 'center' });
 
-    // Table
-    const tableData = transactions.map((t) => [
+      doc.setFontSize(10);
+      doc.text(`Period: ${activeTab}`, 10, 55);
+      doc.text(`Personnel: ${selectedPersonnel}`, 10, 60);
+
+      const tableData = exportData.data.map((t) => [
         t.orNumber,
         new Date(t.orderDate).toLocaleDateString('en-GB'),
         t.personnel,
         t.resident,
         t.documentType,
         `PHP ${t.amount}`,
-    ]);
+      ]);
 
-    autoTable(doc, {
+      autoTable(doc, {
         startY: 70,
         head: [['OR Number', 'Date', 'Personnel', 'Resident', 'Type', 'Fee']],
         body: tableData,
         styles: { fontSize: 8, cellPadding: 2 },
         headStyles: { fillColor: [41, 128, 185], textColor: 255, fontStyle: 'bold' },
         columnStyles: {
-            0: { cellWidth: 25 },
-            1: { cellWidth: 20 },
-            2: { cellWidth: 30 },
-            3: { cellWidth: 35 },
-            4: { cellWidth: 35 },
-            5: { cellWidth: 15 },
+          0: { cellWidth: 25 },
+          1: { cellWidth: 20 },
+          2: { cellWidth: 30 },
+          3: { cellWidth: 35 },
+          4: { cellWidth: 35 },
+          5: { cellWidth: 15 },
         },
         margin: { top: 70, left: 10, right: 10 },
-    });
+      });
 
-    // Totals
-    const finalY = (doc as any).lastAutoTable?.finalY || 200;
-    doc.setFontSize(10);
-    doc.setFont(undefined, 'bold');
-    doc.text(`Total Transactions: ${summary.totalTransactions}`, 10, finalY + 10);
-    doc.text(`Accumulated Fee: PHP ${summary.accumulatedFee.toLocaleString()}`, 10, finalY + 16);
+      const finalY = (doc as any).lastAutoTable?.finalY || 200;
+      doc.setFontSize(10);
+      doc.setFont(undefined, 'bold');
+      doc.text(`Total Transactions: ${exportData.summary.totalTransactions}`, 10, finalY + 10);
+      doc.text(`Accumulated Fee: PHP ${exportData.summary.accumulatedFee.toLocaleString()}`, 10, finalY + 16);
 
-    // Footer
-    const pageCount = doc.getNumberOfPages();
-    for (let i = 1; i <= pageCount; i++) {
+      const pageCount = doc.getNumberOfPages();
+      for (let i = 1; i <= pageCount; i++) {
         doc.setPage(i);
         const pageHeight = doc.internal.pageSize.height;
         doc.setFontSize(8);
         doc.setFont(undefined, 'normal');
         doc.text(`Generated on: ${new Date().toLocaleDateString()}`, 10, pageHeight - 10);
         doc.text(`Generated by: ${user ? `${user.firstName} ${user.lastName}` : 'Unknown'}`, pageWidth - 10, pageHeight - 10, { align: 'right' });
-    }
+      }
 
-    doc.save(`Transactions_${activeTab}_${new Date().toISOString().split('T')[0]}.pdf`);
+      doc.save(`Transactions_${activeTab}_${new Date().toISOString().split('T')[0]}.pdf`);
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   return (
@@ -417,8 +435,20 @@ const TransactionSection: React.FC = () => {
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-[clamp(1rem,1.5vw,1.5rem)] gap-4">
             <h3 className="text-[clamp(0.9rem,1.25vw,1.125rem)] font-bold text-gray-900 tracking-tight">Document Transactions</h3>
             <div className="flex flex-wrap items-center gap-2 xl:gap-2.5">
-              <button onClick={handleExportCSV} className="bg-green-400 hover:bg-green-500 text-white px-3 xl:px-4 py-1.5 rounded-lg text-[9px] xl:text-[10px] font-bold transition-colors tracking-wide uppercase">CSV</button>
-              <button onClick={handleExportPDF} className="bg-red-500 hover:bg-red-600 text-white px-3 xl:px-4 py-1.5 rounded-lg text-[9px] xl:text-[10px] font-bold transition-colors tracking-wide uppercase">PDF</button>
+              <button
+                onClick={handleExportCSV}
+                disabled={isExporting}
+                className="bg-green-400 hover:bg-green-500 text-white px-3 xl:px-4 py-1.5 rounded-lg text-[9px] xl:text-[10px] font-bold transition-colors tracking-wide uppercase disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isExporting ? 'Exporting...' : 'CSV'}
+              </button>
+              <button
+                onClick={handleExportPDF}
+                disabled={isExporting}
+                className="bg-red-500 hover:bg-red-600 text-white px-3 xl:px-4 py-1.5 rounded-lg text-[9px] xl:text-[10px] font-bold transition-colors tracking-wide uppercase disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isExporting ? 'Exporting...' : 'PDF'}
+              </button>
               <div className="relative ml-1">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-blue-300 w-3.5 h-3.5" />
                 <input
