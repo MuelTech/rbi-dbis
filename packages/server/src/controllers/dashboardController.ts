@@ -228,3 +228,85 @@ export async function getTransactions(
     next(err);
   }
 }
+
+export async function getTransactionsExport(
+  req: Request,
+  res: Response,
+  next: NextFunction
+) {
+  try {
+    const period = (req.query.period as string) || "month";
+    const from = req.query.from as string;
+    const to = req.query.to as string;
+    const personnelId = req.query.personnelId as string;
+
+    const now = new Date();
+    let startDate: Date;
+
+    if (period === "custom" && from && to) {
+      startDate = new Date(from);
+      now.setTime(new Date(to).getTime());
+    } else if (period === "day") {
+      startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    } else if (period === "week") {
+      startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    } else {
+      startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+    }
+
+    const where: any = {
+      orderDate: {
+        gte: startDate,
+        lte: now,
+      },
+    };
+
+    if (personnelId && personnelId !== 'All') {
+      where.userId = personnelId;
+    }
+
+    const [orders, summary] = await Promise.all([
+      prisma.order.findMany({
+        where,
+        orderBy: { orderDate: "desc" },
+        include: {
+          user: {
+            include: { userInfo: true },
+          },
+          resident: true,
+          document: {
+            include: { documentType: true },
+          },
+        },
+      }),
+      prisma.order.aggregate({
+        where,
+        _sum: { amount: true },
+        _count: true,
+      }),
+    ]);
+
+    const data = orders.map((order) => ({
+      id: order.id,
+      documentId: order.documentId,
+      orNumber: order.orNumber,
+      orderDate: order.orderDate,
+      amount: Number(order.amount),
+      personnel: order.user?.userInfo
+        ? `${order.user.userInfo.firstName} ${order.user.userInfo.lastName}`
+        : order.user?.username ?? "Unknown",
+      resident: `${order.resident.firstName} ${order.resident.lastName}`,
+      documentType: order.document?.documentType?.documentName ?? "Unknown",
+    }));
+
+    res.json({
+      data,
+      summary: {
+        accumulatedFee: Number(summary._sum.amount) || 0,
+        totalTransactions: summary._count || 0,
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+}
