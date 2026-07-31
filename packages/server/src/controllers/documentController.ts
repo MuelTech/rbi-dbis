@@ -67,6 +67,50 @@ export async function getDocumentById(
   }
 }
 
+export async function getLastDocument(
+  req: Request,
+  res: Response,
+  next: NextFunction
+) {
+  try {
+    const { residentId, documentTypeId } = req.query;
+
+    if (!residentId || !documentTypeId) {
+      res.json(null);
+      return;
+    }
+
+    const document = await prisma.document.findFirst({
+      where: {
+        order: {
+          residentId: residentId as string,
+        },
+        documentTypeId: documentTypeId as string,
+      },
+      include: {
+        order: true,
+      },
+      orderBy: {
+        issueDate: 'desc',
+      },
+    });
+
+    if (!document) {
+      res.json(null);
+      return;
+    }
+
+    res.json({
+      id: document.id,
+      formData: document.formData,
+      purpose: document.purpose,
+      issueDate: document.issueDate,
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
 export async function createDocument(
   req: Request,
   res: Response,
