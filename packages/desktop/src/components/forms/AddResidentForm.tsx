@@ -286,6 +286,35 @@ const AddResidentForm: React.FC<AddResidentFormProps> = ({ onCancel, setIsNaviga
         return /^09\d{9}$/.test(cleaned);
     };
 
+    const validateDate = (dateStr: string): string | null => {
+        if (!dateStr) return null;
+        const date = new Date(dateStr);
+        if (isNaN(date.getTime())) return 'Invalid date format';
+        const now = new Date();
+        if (date > now) return 'Date cannot be in the future';
+        const maxAge = new Date();
+        maxAge.setFullYear(maxAge.getFullYear() - 150);
+        if (date < maxAge) return 'Date is too old';
+        return null;
+    };
+
+    const validateNumber = (value: string, min: number, max: number, fieldName: string): string | null => {
+        if (!value || value.trim() === '') return null;
+        const num = parseInt(value, 10);
+        if (isNaN(num)) return `${fieldName} must be a number`;
+        if (num < min) return `${fieldName} must be at least ${min}`;
+        if (num > max) return `${fieldName} must be at most ${max}`;
+        return null;
+    };
+
+    const validatePlateNumber = (value: string): string | null => {
+        if (!value || value.trim() === '') return null;
+        if (!/^[A-Za-z0-9\s\-]+$/.test(value.trim())) {
+            return 'Plate number should only contain letters, numbers, spaces, or hyphens';
+        }
+        return null;
+    };
+
     const validateStep = (step: number) => {
         const newErrors: Record<string, string> = {};
 
@@ -298,15 +327,39 @@ const AddResidentForm: React.FC<AddResidentFormProps> = ({ onCancel, setIsNaviga
 
             if (formData.hasPets === 'Yes') {
                 if (!formData.numberOfDogs) newErrors.numberOfDogs = 'Number of Dogs is required';
+                else {
+                    const dogsErr = validateNumber(formData.numberOfDogs, 0, 100, 'Number of Dogs');
+                    if (dogsErr) newErrors.numberOfDogs = dogsErr;
+                }
                 if (!formData.numberOfCats) newErrors.numberOfCats = 'Number of Cats is required';
+                else {
+                    const catsErr = validateNumber(formData.numberOfCats, 0, 100, 'Number of Cats');
+                    if (catsErr) newErrors.numberOfCats = catsErr;
+                }
                 if (!formData.otherAnimals) newErrors.otherAnimals = 'Other Animals is required';
             }
 
             if (formData.hasVehicles === 'Yes') {
                 if (!formData.numberOfMotorcycles) newErrors.numberOfMotorcycles = 'Number of Motorcycles is required';
+                else {
+                    const motorcyclesErr = validateNumber(formData.numberOfMotorcycles, 0, 50, 'Number of Motorcycles');
+                    if (motorcyclesErr) newErrors.numberOfMotorcycles = motorcyclesErr;
+                }
                 if (!formData.motorcyclePlateNumbers) newErrors.motorcyclePlateNumbers = 'Motorcycle Plate Numbers is required';
+                else {
+                    const plateErr1 = validatePlateNumber(formData.motorcyclePlateNumbers);
+                    if (plateErr1) newErrors.motorcyclePlateNumbers = plateErr1;
+                }
                 if (!formData.numberOfOtherVehicles) newErrors.numberOfOtherVehicles = 'Number of Other Vehicles is required';
+                else {
+                    const otherVehiclesErr = validateNumber(formData.numberOfOtherVehicles, 0, 50, 'Number of Other Vehicles');
+                    if (otherVehiclesErr) newErrors.numberOfOtherVehicles = otherVehiclesErr;
+                }
                 if (!formData.otherVehiclePlateNumbers) newErrors.otherVehiclePlateNumbers = 'Vehicle Plate Numbers is required';
+                else {
+                    const plateErr2 = validatePlateNumber(formData.otherVehiclePlateNumbers);
+                    if (plateErr2) newErrors.otherVehiclePlateNumbers = plateErr2;
+                }
             }
         } else if (step === 2) {
             if (!formData.headFirstName) newErrors.headFirstName = 'First Name is required';
@@ -315,7 +368,16 @@ const AddResidentForm: React.FC<AddResidentFormProps> = ({ onCancel, setIsNaviga
             if (!formData.headLastName) newErrors.headLastName = 'Last Name is required';
             else if (!validateName(formData.headLastName)) newErrors.headLastName = 'Last Name should only contain letters';
 
-            if (!formData.headBirthDate) newErrors.headBirthDate = 'Date of Birth is required';
+            if (formData.headMiddleName && !validateName(formData.headMiddleName)) {
+                newErrors.headMiddleName = 'Middle Name should only contain letters';
+            }
+
+            if (!formData.headBirthDate) {
+                newErrors.headBirthDate = 'Date of Birth is required';
+            } else {
+                const dateErr = validateDate(formData.headBirthDate);
+                if (dateErr) newErrors.headBirthDate = dateErr;
+            }
             if (!formData.headCivilStatus) newErrors.headCivilStatus = 'Civil Status is required';
             if (!formData.headSex) newErrors.headSex = 'Sex is required';
             if (!formData.headOccupation) newErrors.headOccupation = 'Occupation is required';
@@ -336,7 +398,16 @@ const AddResidentForm: React.FC<AddResidentFormProps> = ({ onCancel, setIsNaviga
                 if (!member.lastName) newErrors[`member_${member.id}_lastName`] = 'Last Name is required';
                 else if (!validateName(member.lastName)) newErrors[`member_${member.id}_lastName`] = 'Last Name should only contain letters';
 
-                if (!member.birthDate) newErrors[`member_${member.id}_birthDate`] = 'Date of Birth is required';
+                if (member.middleName && !validateName(member.middleName)) {
+                    newErrors[`member_${member.id}_middleName`] = 'Middle Name should only contain letters';
+                }
+
+                if (!member.birthDate) {
+                    newErrors[`member_${member.id}_birthDate`] = 'Date of Birth is required';
+                } else {
+                    const dateErr = validateDate(member.birthDate);
+                    if (dateErr) newErrors[`member_${member.id}_birthDate`] = dateErr;
+                }
                 if (!member.civilStatus) newErrors[`member_${member.id}_civilStatus`] = 'Civil Status is required';
                 if (!member.sex) newErrors[`member_${member.id}_sex`] = 'Sex is required';
                 if (!member.occupation) newErrors[`member_${member.id}_occupation`] = 'Occupation is required';
@@ -670,11 +741,12 @@ const AddResidentForm: React.FC<AddResidentFormProps> = ({ onCancel, setIsNaviga
                                         <label className="text-[13px] font-bold text-gray-700">Middle Name</label>
                                         <input 
                                             type="text"
-                                            className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-xl text-[14px] text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                                            className={`w-full px-4 py-2.5 bg-white border ${errors.headMiddleName ? 'border-red-500' : 'border-gray-200'} rounded-xl text-[14px] text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all`}
                                             value={formData.headMiddleName}
                                             onChange={(e) => setFormData({...formData, headMiddleName: e.target.value})}
                                             placeholder="Santos"
                                         />
+                                        {errors.headMiddleName && <p className="text-red-500 text-xs mt-1">{errors.headMiddleName}</p>}
                                     </div>
                                     <div className="space-y-2">
                                         <label className="text-[13px] font-bold text-gray-700">Last Name <span className="text-red-500">*</span></label>
@@ -973,11 +1045,12 @@ const AddResidentForm: React.FC<AddResidentFormProps> = ({ onCancel, setIsNaviga
                                                                 <label className="text-[13px] font-bold text-gray-700">Middle Name</label>
                                                                 <input 
                                                                     type="text"
-                                                                    className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-xl text-[14px] text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                                                                    className={`w-full px-4 py-2.5 bg-white border ${errors[`member_${member.id}_middleName`] ? 'border-red-500' : 'border-gray-200'} rounded-xl text-[14px] text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all`}
                                                                     value={member.middleName}
                                                                     onChange={(e) => updateFamilyMember(member.id, 'middleName', e.target.value)}
                                                                     placeholder="Santos"
                                                                 />
+                                                                {errors[`member_${member.id}_middleName`] && <p className="text-red-500 text-xs mt-1">{errors[`member_${member.id}_middleName`]}</p>}
                                                             </div>
                                                             <div className="space-y-2">
                                                                 <label className="text-[13px] font-bold text-gray-700">Last Name <span className="text-red-500">*</span></label>
