@@ -30,6 +30,7 @@ pnpm db:migrate
 
 # Start the API server (http://localhost:4000)
 pnpm dev:server
+#QA account -> username: qa_admin  password: Rbi#QA2026!xK9m
 
 # Start the desktop app (Electron + Vite)
 pnpm dev:desktop

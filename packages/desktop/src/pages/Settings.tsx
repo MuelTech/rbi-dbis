@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import ContentCard from '@/components/ui/ContentCard';
 import ConfirmationModal from '@/components/ui/ConfirmationModal';
 import { Image, MapPin, Users, Save, Upload, Settings as SettingsIcon, FileText, List, Plus, X, Database, Download, UploadCloud, History, FileUp, Loader2 } from 'lucide-react';
-import { settingsService, BarangaySettings } from '@/services/settings';
+import { settingsService, BarangaySettings, ProgressUpdate } from '@/services/settings';
 
 interface SettingsProps {
     onShowSuccess?: (message: string) => void;
@@ -34,6 +34,8 @@ const Settings: React.FC<SettingsProps> = ({ onShowSuccess, setIsNavigationBlock
     const [showRestoreConfirm, setShowRestoreConfirm] = useState(false);
     const [pendingRestoreFile, setPendingRestoreFile] = useState<File | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const [restoreError, setRestoreError] = useState<string | null>(null);
+    const [progressModal, setProgressModal] = useState<{ type: 'backup' | 'restore'; progress: ProgressUpdate | null } | null>(null);
 
     const saveMutation = useMutation({
         mutationFn: (data: BarangaySettings) => settingsService.update(data),
@@ -44,9 +46,19 @@ const Settings: React.FC<SettingsProps> = ({ onShowSuccess, setIsNavigationBlock
         },
     });
 
-    const backupMutation = useMutation({
-        mutationFn: () => settingsService.backup(),
-        onSuccess: (data) => {
+    const [isBackupRunning, setIsBackupRunning] = useState(false);
+    const [isRestoreRunning, setIsRestoreRunning] = useState(false);
+
+    const handleBackup = async () => {
+        setIsBackupRunning(true);
+        setProgressModal({ type: 'backup', progress: null });
+        try {
+            const data = await settingsService.backupWithProgress((update) => {
+                setProgressModal((prev) => prev ? { ...prev, progress: update } : null);
+            });
+            // Small delay so user sees 100% before modal closes
+            await new Promise((r) => setTimeout(r, 400));
+            setProgressModal(null);
             const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
@@ -57,17 +69,13 @@ const Settings: React.FC<SettingsProps> = ({ onShowSuccess, setIsNavigationBlock
             const now = new Date();
             setLastBackup(now.toLocaleString());
             if (onShowSuccess) onShowSuccess('Backup downloaded successfully');
-        },
-    });
-
-    const restoreMutation = useMutation({
-        mutationFn: (data: any) => settingsService.restore(data),
-        onSuccess: () => {
-            queryClient.invalidateQueries();
-            if (onShowSuccess) onShowSuccess('Data restored successfully. Please log in again.');
-            if (setIsNavigationBlocked) setIsNavigationBlocked(false);
-        },
-    });
+        } catch (err: any) {
+            setProgressModal(null);
+            if (onShowSuccess) onShowSuccess(`Backup failed: ${err?.message || 'Unknown error'}`);
+        } finally {
+            setIsBackupRunning(false);
+        }
+    };
 
     const isDirty = JSON.stringify(formData) !== JSON.stringify(settings) || JSON.stringify(purposes) !== JSON.stringify(settings?.purposes);
 
@@ -99,10 +107,6 @@ const Settings: React.FC<SettingsProps> = ({ onShowSuccess, setIsNavigationBlock
         await saveMutation.mutateAsync(payload);
     };
 
-    const handleBackup = () => {
-        backupMutation.mutate();
-    };
-
     const handleRestoreFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file) return;
@@ -113,24 +117,40 @@ const Settings: React.FC<SettingsProps> = ({ onShowSuccess, setIsNavigationBlock
 
     const handleRestoreConfirm = async () => {
         if (!pendingRestoreFile) return;
+        setShowRestoreConfirm(false);
+        setIsRestoreRunning(true);
+        setRestoreError(null);
+        setProgressModal({ type: 'restore', progress: null });
         try {
             const text = await pendingRestoreFile.text();
             let backup;
             try {
                 backup = JSON.parse(text);
             } catch {
+                setProgressModal(null);
                 if (onShowSuccess) onShowSuccess('Invalid backup file: not valid JSON');
-                setShowRestoreConfirm(false);
+                setIsRestoreRunning(false);
                 setPendingRestoreFile(null);
                 return;
             }
-            await restoreMutation.mutateAsync(backup);
+            await settingsService.restoreWithProgress(backup, (update) => {
+                setProgressModal((prev) => prev ? { ...prev, progress: update } : null);
+            });
+            // Small delay so user sees 100% before modal closes
+            await new Promise((r) => setTimeout(r, 400));
+            setProgressModal(null);
+            queryClient.invalidateQueries();
+            if (onShowSuccess) onShowSuccess('Data restored successfully. Please log in again.');
+            if (setIsNavigationBlocked) setIsNavigationBlocked(false);
         } catch (err: any) {
+            setProgressModal(null);
             const msg = err?.message || 'Restore failed';
+            setRestoreError(msg);
             if (onShowSuccess) onShowSuccess(`Restore failed: ${msg}`);
+        } finally {
+            setIsRestoreRunning(false);
+            setPendingRestoreFile(null);
         }
-        setShowRestoreConfirm(false);
-        setPendingRestoreFile(null);
     };
 
     const tabs = [
@@ -454,17 +474,17 @@ const Settings: React.FC<SettingsProps> = ({ onShowSuccess, setIsNavigationBlock
                                         <p className="text-sm font-bold text-gray-900">{lastBackup ?? 'No backup yet'}</p>
                                     </div>
 
-                                    <button 
+                                    <button
                                         onClick={handleBackup}
-                                        disabled={backupMutation.isPending}
+                                        disabled={isBackupRunning}
                                         className="w-full bg-[#10B981] hover:bg-green-600 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-all shadow-lg shadow-green-200 active:scale-95 mt-auto disabled:opacity-50 disabled:cursor-not-allowed"
                                     >
-                                        {backupMutation.isPending ? (
+                                        {isBackupRunning ? (
                                             <Loader2 size={18} className="animate-spin" />
                                         ) : (
                                             <Download size={18} />
                                         )}
-                                        {backupMutation.isPending ? 'Backing up...' : 'Download Backup'}
+                                        {isBackupRunning ? 'Backing up...' : 'Download Backup'}
                                     </button>
                                 </div>
                             </div>
@@ -498,18 +518,24 @@ const Settings: React.FC<SettingsProps> = ({ onShowSuccess, setIsNavigationBlock
                                     />
                                     <button
                                         onClick={() => fileInputRef.current?.click()}
-                                        disabled={restoreMutation.isPending}
+                                        disabled={isRestoreRunning}
                                         className="w-full border-2 border-dashed border-gray-200 rounded-xl p-8 flex flex-col items-center justify-center cursor-pointer hover:border-blue-400 hover:bg-blue-50 transition-all group mt-auto disabled:opacity-50 disabled:cursor-not-allowed"
                                     >
-                                        {restoreMutation.isPending ? (
+                                        {isRestoreRunning ? (
                                             <Loader2 className="w-8 h-8 text-blue-500 animate-spin mb-2" />
                                         ) : (
                                             <UploadCloud className="w-8 h-8 text-gray-400 group-hover:text-blue-500 mb-2 transition-colors" />
                                         )}
                                         <span className="text-sm font-bold text-gray-500 group-hover:text-blue-600 transition-colors">
-                                            {restoreMutation.isPending ? 'Restoring...' : 'Select File to Restore'}
+                                            {isRestoreRunning ? 'Restoring...' : 'Select File to Restore'}
                                         </span>
                                     </button>
+
+                                    {restoreError && (
+                                        <div className="w-full mt-4 p-3 bg-red-50 border border-red-200 rounded-xl">
+                                            <p className="text-xs font-medium text-red-600">{restoreError}</p>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
 
@@ -520,6 +546,56 @@ const Settings: React.FC<SettingsProps> = ({ onShowSuccess, setIsNavigationBlock
                                 title="Restore Backup?"
                                 message={`This will overwrite all current data with the contents of "${pendingRestoreFile?.name}". This action cannot be undone. Continue?`}
                             />
+
+                            {/* Progress Modal */}
+                            {progressModal && (
+                                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+                                    <div className="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-sm mx-4">
+                                        <div className="flex flex-col items-center text-center">
+                                            <div className={`w-16 h-16 rounded-full flex items-center justify-center mb-5 ${
+                                                progressModal.type === 'backup' ? 'bg-green-50' : 'bg-blue-50'
+                                            }`}>
+                                                {progressModal.type === 'backup' ? (
+                                                    <Download className="w-8 h-8 text-green-500" />
+                                                ) : (
+                                                    <UploadCloud className="w-8 h-8 text-blue-500" />
+                                                )}
+                                            </div>
+
+                                            <h3 className="text-lg font-bold text-gray-900 mb-1">
+                                                {progressModal.type === 'backup' ? 'Backing Up Data' : 'Restoring Data'}
+                                            </h3>
+
+                                            {progressModal.progress ? (
+                                                <p className="text-sm text-gray-500 mb-5">
+                                                    {progressModal.progress.step}
+                                                </p>
+                                            ) : (
+                                                <p className="text-sm text-gray-500 mb-5">
+                                                    {progressModal.type === 'backup' ? 'Preparing backup...' : 'Preparing restore...'}
+                                                </p>
+                                            )}
+
+                                            <div className="w-full">
+                                                <div className="flex justify-between text-xs text-gray-400 mb-1.5">
+                                                    <span>Progress</span>
+                                                    <span className="font-semibold text-gray-700">
+                                                        {progressModal.progress?.percent ?? 0}%
+                                                    </span>
+                                                </div>
+                                                <div className="w-full h-2.5 bg-gray-100 rounded-full overflow-hidden">
+                                                    <div
+                                                        className={`h-full rounded-full transition-all duration-300 ease-out ${
+                                                            progressModal.type === 'backup' ? 'bg-green-500' : 'bg-blue-500'
+                                                        }`}
+                                                        style={{ width: `${progressModal.progress?.percent ?? 0}%` }}
+                                                    />
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     )}
                 </div>

@@ -81,46 +81,64 @@ export async function updateSettings(
   }
 }
 
+function sendSSE(res: Response, event: string, data: unknown) {
+  res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+  // flush to ensure event is sent immediately
+  if (typeof (res as any).flush === "function") {
+    (res as any).flush();
+  }
+}
+
 export async function backupData(
   _req: Request,
   res: Response,
   next: NextFunction
 ) {
   try {
-    const [setting, residents, families, households, blocks, users, documents, documentTypes] =
-      await Promise.all([
-        prisma.barangaySetting.findFirst(),
-        prisma.resident.findMany(),
-        prisma.family.findMany({
-          include: { pet: true, vehicle: true, address: true, members: true },
-        }),
-        prisma.household.findMany(),
-        prisma.block.findMany(),
-        prisma.user.findMany({
-          include: { userInfo: true },
-        }),
-        prisma.document.findMany({
-          include: { documentType: true, signers: true },
-        }),
-        prisma.documentType.findMany(),
-      ]);
+    res.setHeader("Content-Type", "text/event-stream");
+    res.setHeader("Cache-Control", "no-cache");
+    res.setHeader("Connection", "keep-alive");
+    res.flushHeaders();
+
+    const steps = [
+      { label: "Fetching settings...", fn: () => prisma.barangaySetting.findFirst() },
+      { label: "Fetching residents...", fn: () => prisma.resident.findMany() },
+      { label: "Fetching families...", fn: () => prisma.family.findMany({ include: { pet: true, vehicle: true, address: true, members: true } }) },
+      { label: "Fetching households...", fn: () => prisma.household.findMany() },
+      { label: "Fetching blocks...", fn: () => prisma.block.findMany() },
+      { label: "Fetching users...", fn: () => prisma.user.findMany({ include: { userInfo: true } }) },
+      { label: "Fetching documents...", fn: () => prisma.document.findMany({ include: { documentType: true, signers: true } }) },
+      { label: "Fetching document types...", fn: () => prisma.documentType.findMany() },
+    ];
+
+    const results: any[] = [];
+    for (let i = 0; i < steps.length; i++) {
+      sendSSE(res, "progress", {
+        step: steps[i].label,
+        current: i + 1,
+        total: steps.length,
+        percent: Math.round(((i + 1) / steps.length) * 100),
+      });
+      results.push(await steps[i].fn());
+    }
 
     const backup = {
       version: 1,
       exportedAt: new Date().toISOString(),
       data: {
-        settings: setting?.data ?? null,
-        residents,
-        families,
-        households,
-        blocks,
-        users,
-        documents,
-        documentTypes,
+        settings: results[0]?.data ?? null,
+        residents: results[1],
+        families: results[2],
+        households: results[3],
+        blocks: results[4],
+        users: results[5],
+        documents: results[6],
+        documentTypes: results[7],
       },
     };
 
-    res.json(backup);
+    sendSSE(res, "complete", backup);
+    res.end();
   } catch (err) {
     next(err);
   }
@@ -136,6 +154,26 @@ export async function restoreData(
     if (!data) {
       return res.status(400).json({ error: "No backup data provided" });
     }
+
+    res.setHeader("Content-Type", "text/event-stream");
+    res.setHeader("Cache-Control", "no-cache");
+    res.setHeader("Connection", "keep-alive");
+    res.flushHeaders();
+
+    const totalSteps = 9; // clear + 8 restore steps
+    let currentStep = 0;
+
+    const sendProgress = (step: string) => {
+      currentStep++;
+      sendSSE(res, "progress", {
+        step,
+        current: currentStep,
+        total: totalSteps,
+        percent: Math.round((currentStep / totalSteps) * 100),
+      });
+    };
+
+    sendProgress("Clearing old data...");
 
     await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       // Clear existing data in reverse dependency order
@@ -157,7 +195,8 @@ export async function restoreData(
       await tx.barangaySetting.deleteMany();
       await tx.record.deleteMany();
 
-      // Restore blocks (strip auto-generated fields)
+      // Restore blocks
+      sendProgress("Restoring blocks...");
       if (data.blocks?.length) {
         for (const block of data.blocks) {
           await tx.block.create({
@@ -167,6 +206,7 @@ export async function restoreData(
       }
 
       // Restore households
+      sendProgress("Restoring households...");
       if (data.households?.length) {
         for (const h of data.households) {
           await tx.household.create({
@@ -175,7 +215,8 @@ export async function restoreData(
         }
       }
 
-      // Restore residents (strip relations and auto-fields)
+      // Restore residents
+      sendProgress("Restoring residents...");
       if (data.residents?.length) {
         for (const r of data.residents) {
           await tx.resident.create({
@@ -205,6 +246,7 @@ export async function restoreData(
       }
 
       // Restore addresses
+      sendProgress("Restoring addresses...");
       const addressMap = new Map<string, string>();
       if (data.families?.length) {
         for (const family of data.families) {
@@ -219,6 +261,7 @@ export async function restoreData(
       }
 
       // Restore families
+      sendProgress("Restoring families...");
       if (data.families?.length) {
         for (const family of data.families) {
           const newAddressId = addressMap.get(family.addressId) ?? family.addressId;
@@ -264,6 +307,7 @@ export async function restoreData(
       }
 
       // Restore users
+      sendProgress("Restoring users...");
       if (data.users?.length) {
         for (const user of data.users) {
           await tx.user.create({
@@ -290,6 +334,7 @@ export async function restoreData(
       }
 
       // Restore document types
+      sendProgress("Restoring document types...");
       const docTypeMap = new Map<string, string>();
       if (data.documentTypes?.length) {
         for (const dt of data.documentTypes) {
@@ -301,6 +346,7 @@ export async function restoreData(
       }
 
       // Restore documents
+      sendProgress("Restoring documents...");
       if (data.documents?.length) {
         for (const doc of data.documents) {
           const newDocTypeId = docTypeMap.get(doc.documentTypeId) ?? doc.documentTypeId;
@@ -327,6 +373,7 @@ export async function restoreData(
       }
 
       // Restore settings
+      sendProgress("Restoring settings...");
       if (data.settings) {
         await tx.barangaySetting.create({ data: { data: data.settings } });
       }
@@ -337,9 +384,11 @@ export async function restoreData(
       await logAction("settings", "1", userId, "RESTORE", null, "Restored data from backup");
     }
 
-    res.json({ success: true, message: "Data restored successfully" });
+    sendSSE(res, "complete", { success: true, message: "Data restored successfully" });
+    res.end();
   } catch (err: any) {
     console.error("Restore error:", err);
-    res.status(500).json({ error: err?.message ?? "Restore failed" });
+    sendSSE(res, "error", { error: err?.message ?? "Restore failed" });
+    res.end();
   }
 }
