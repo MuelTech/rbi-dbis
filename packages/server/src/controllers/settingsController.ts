@@ -1,6 +1,17 @@
 import type { Request, Response, NextFunction } from "express";
-import { prisma, Prisma } from "@rbi/db";
+import bcrypt from "bcryptjs";
+import jwt from "jsonwebtoken";
+import type { StringValue } from "ms";
+import { prisma } from "@rbi/db";
 import { logAction } from "../services/auditService.js";
+import {
+  buildBackup,
+  applyBackup,
+  validateBackup,
+} from "../services/backupService.js";
+
+const JWT_SECRET = process.env.JWT_SECRET ?? "dev-jwt-secret-change-me";
+const JWT_EXPIRES_IN = (process.env.JWT_EXPIRES_IN ?? "8h") as StringValue;
 
 const DEFAULT_SETTINGS = {
   slogan: "Serbisyong Tapat, Para sa Lahat",
@@ -81,6 +92,44 @@ export async function updateSettings(
   }
 }
 
+export async function verifyBackupPassword(
+  req: Request,
+  res: Response,
+  next: NextFunction
+) {
+  try {
+    const userId = req.user?.id;
+    const { password } = req.body ?? {};
+
+    if (!password) {
+      res.status(400).json({ error: "Password is required" });
+      return;
+    }
+
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user) {
+      res.status(404).json({ error: "User not found" });
+      return;
+    }
+
+    const valid = await bcrypt.compare(password, user.password);
+    if (!valid) {
+      res.status(401).json({ error: "Incorrect password" });
+      return;
+    }
+
+    const unlockToken = jwt.sign(
+      { sub: user.id, scope: "backup-restore" },
+      JWT_SECRET,
+      { expiresIn: JWT_EXPIRES_IN }
+    );
+
+    res.json({ unlockToken });
+  } catch (err) {
+    next(err);
+  }
+}
+
 function sendSSE(res: Response, event: string, data: unknown) {
   res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
   // flush to ensure event is sent immediately
@@ -89,53 +138,24 @@ function sendSSE(res: Response, event: string, data: unknown) {
   }
 }
 
+function startSSE(res: Response) {
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache");
+  res.setHeader("Connection", "keep-alive");
+  res.flushHeaders();
+}
+
 export async function backupData(
   _req: Request,
   res: Response,
   next: NextFunction
 ) {
   try {
-    res.setHeader("Content-Type", "text/event-stream");
-    res.setHeader("Cache-Control", "no-cache");
-    res.setHeader("Connection", "keep-alive");
-    res.flushHeaders();
+    startSSE(res);
 
-    const steps = [
-      { label: "Fetching settings...", fn: () => prisma.barangaySetting.findFirst() },
-      { label: "Fetching residents...", fn: () => prisma.resident.findMany() },
-      { label: "Fetching families...", fn: () => prisma.family.findMany({ include: { pet: true, vehicle: true, address: true, members: true } }) },
-      { label: "Fetching households...", fn: () => prisma.household.findMany() },
-      { label: "Fetching blocks...", fn: () => prisma.block.findMany() },
-      { label: "Fetching users...", fn: () => prisma.user.findMany({ include: { userInfo: true } }) },
-      { label: "Fetching documents...", fn: () => prisma.document.findMany({ include: { documentType: true, signers: true } }) },
-      { label: "Fetching document types...", fn: () => prisma.documentType.findMany() },
-    ];
-
-    const results: any[] = [];
-    for (let i = 0; i < steps.length; i++) {
-      sendSSE(res, "progress", {
-        step: steps[i].label,
-        current: i + 1,
-        total: steps.length,
-        percent: Math.round(((i + 1) / steps.length) * 100),
-      });
-      results.push(await steps[i].fn());
-    }
-
-    const backup = {
-      version: 1,
-      exportedAt: new Date().toISOString(),
-      data: {
-        settings: results[0]?.data ?? null,
-        residents: results[1],
-        families: results[2],
-        households: results[3],
-        blocks: results[4],
-        users: results[5],
-        documents: results[6],
-        documentTypes: results[7],
-      },
-    };
+    const backup = await buildBackup((progress) =>
+      sendSSE(res, "progress", progress)
+    );
 
     sendSSE(res, "complete", backup);
     res.end();
@@ -150,234 +170,20 @@ export async function restoreData(
   next: NextFunction
 ) {
   try {
-    const { data } = req.body;
-    if (!data) {
-      return res.status(400).json({ error: "No backup data provided" });
+    const payload = req.body ?? {};
+
+    startSSE(res);
+
+    const validationError = validateBackup(payload);
+    if (validationError) {
+      sendSSE(res, "error", { error: validationError });
+      res.end();
+      return;
     }
 
-    res.setHeader("Content-Type", "text/event-stream");
-    res.setHeader("Cache-Control", "no-cache");
-    res.setHeader("Connection", "keep-alive");
-    res.flushHeaders();
-
-    const totalSteps = 9; // clear + 8 restore steps
-    let currentStep = 0;
-
-    const sendProgress = (step: string) => {
-      currentStep++;
-      sendSSE(res, "progress", {
-        step,
-        current: currentStep,
-        total: totalSteps,
-        percent: Math.round((currentStep / totalSteps) * 100),
-      });
-    };
-
-    sendProgress("Clearing old data...");
-
-    await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-      // Clear existing data in reverse dependency order
-      await tx.documentSigner.deleteMany();
-      await tx.order.deleteMany();
-      await tx.document.deleteMany();
-      await tx.documentType.deleteMany();
-      await tx.familyMember.deleteMany();
-      await tx.familyPet.deleteMany();
-      await tx.familyVehicle.deleteMany();
-      await tx.family.deleteMany();
-      await tx.address.deleteMany();
-      await tx.household.deleteMany();
-      await tx.block.deleteMany();
-      await tx.resident.deleteMany();
-      await tx.auditTrail.deleteMany();
-      await tx.userInfo.deleteMany();
-      await tx.user.deleteMany();
-      await tx.barangaySetting.deleteMany();
-      await tx.record.deleteMany();
-
-      // Restore blocks
-      sendProgress("Restoring blocks...");
-      if (data.blocks?.length) {
-        for (const block of data.blocks) {
-          await tx.block.create({
-            data: { id: block.id, blockNumber: block.blockNumber },
-          });
-        }
-      }
-
-      // Restore households
-      sendProgress("Restoring households...");
-      if (data.households?.length) {
-        for (const h of data.households) {
-          await tx.household.create({
-            data: { id: h.id, brgyHouseholdNo: h.brgyHouseholdNo, blockId: h.blockId },
-          });
-        }
-      }
-
-      // Restore residents
-      sendProgress("Restoring residents...");
-      if (data.residents?.length) {
-        for (const r of data.residents) {
-          await tx.resident.create({
-            data: {
-              id: r.id,
-              lastName: r.lastName,
-              firstName: r.firstName,
-              middleName: r.middleName,
-              suffix: r.suffix,
-              placeOfBirth: r.placeOfBirth,
-              dateOfBirth: r.dateOfBirth ? new Date(r.dateOfBirth) : null,
-              sex: r.sex,
-              civilStatus: r.civilStatus,
-              isVoter: r.isVoter,
-              isPwd: r.isPwd,
-              isSoloParent: r.isSoloParent,
-              isOwner: r.isOwner,
-              studentType: r.studentType,
-              statusType: r.statusType,
-              contactNumber: r.contactNumber,
-              occupationType: r.occupationType,
-              profileImage: r.profileImage,
-              recordId: r.recordId,
-            },
-          });
-        }
-      }
-
-      // Restore addresses
-      sendProgress("Restoring addresses...");
-      const addressMap = new Map<string, string>();
-      if (data.families?.length) {
-        for (const family of data.families) {
-          if (family.address) {
-            const addr = family.address;
-            const newAddr = await tx.address.create({
-              data: { houseNo: addr.houseNo, streetName: addr.streetName, alleyName: addr.alleyName },
-            });
-            addressMap.set(addr.id, newAddr.id);
-          }
-        }
-      }
-
-      // Restore families
-      sendProgress("Restoring families...");
-      if (data.families?.length) {
-        for (const family of data.families) {
-          const newAddressId = addressMap.get(family.addressId) ?? family.addressId;
-          await tx.family.create({
-            data: {
-              id: family.id,
-              familyName: family.familyName,
-              isArchived: family.isArchived,
-              householdId: family.householdId,
-              headPersonId: family.headPersonId,
-              addressId: newAddressId,
-              ...(family.pet && {
-                pet: {
-                  create: {
-                    isPetOwner: family.pet.isPetOwner,
-                    numberOfDogs: family.pet.numberOfDogs,
-                    numberOfCats: family.pet.numberOfCats,
-                    others: family.pet.others,
-                  },
-                },
-              }),
-              ...(family.vehicle && {
-                vehicle: {
-                  create: {
-                    numberOfMotorcycles: family.vehicle.numberOfMotorcycles,
-                    motorcyclePlateNumber: family.vehicle.motorcyclePlateNumber,
-                    numberOfVehicles: family.vehicle.numberOfVehicles,
-                    vehiclePlateNumber: family.vehicle.vehiclePlateNumber,
-                  },
-                },
-              }),
-              ...(family.members?.length && {
-                members: {
-                  create: family.members.map((m: any) => ({
-                    relationshipType: m.relationshipType,
-                    residentId: m.residentId,
-                  })),
-                },
-              }),
-            },
-          });
-        }
-      }
-
-      // Restore users
-      sendProgress("Restoring users...");
-      if (data.users?.length) {
-        for (const user of data.users) {
-          await tx.user.create({
-            data: {
-              id: user.id,
-              username: user.username,
-              password: user.password,
-              roleType: user.roleType,
-              isActive: user.isActive,
-              permission: user.permission,
-              ...(user.userInfo && {
-                userInfo: {
-                  create: {
-                    firstName: user.userInfo.firstName,
-                    lastName: user.userInfo.lastName,
-                    phoneNumber: user.userInfo.phoneNumber,
-                    profileImage: user.userInfo.profileImage,
-                  },
-                },
-              }),
-            },
-          });
-        }
-      }
-
-      // Restore document types
-      sendProgress("Restoring document types...");
-      const docTypeMap = new Map<string, string>();
-      if (data.documentTypes?.length) {
-        for (const dt of data.documentTypes) {
-          const newDt = await tx.documentType.create({
-            data: { documentName: dt.documentName, amount: dt.amount },
-          });
-          docTypeMap.set(dt.id, newDt.id);
-        }
-      }
-
-      // Restore documents
-      sendProgress("Restoring documents...");
-      if (data.documents?.length) {
-        for (const doc of data.documents) {
-          const newDocTypeId = docTypeMap.get(doc.documentTypeId) ?? doc.documentTypeId;
-          await tx.document.create({
-            data: {
-              id: doc.id,
-              issueDate: new Date(doc.issueDate),
-              purpose: doc.purpose,
-              validityPeriod: doc.validityPeriod,
-              documentTypeId: newDocTypeId,
-              ...(doc.signers?.length && {
-                signers: {
-                  create: doc.signers.map((s: any) => ({
-                    signerFirstName: s.signerFirstName,
-                    signerLastName: s.signerLastName,
-                    signerRole: s.signerRole,
-                    barangayOfficialId: s.barangayOfficialId,
-                  })),
-                },
-              }),
-            },
-          });
-        }
-      }
-
-      // Restore settings
-      sendProgress("Restoring settings...");
-      if (data.settings) {
-        await tx.barangaySetting.create({ data: { data: data.settings } });
-      }
-    });
+    await applyBackup(payload.data, (progress) =>
+      sendSSE(res, "progress", progress)
+    );
 
     const userId = req.user?.id;
     if (userId) {

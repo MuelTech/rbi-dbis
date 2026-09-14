@@ -2,6 +2,7 @@
   "name": "rbi-dbis",
   "private": true,
   "scripts": {
+    "test": "pnpm --filter @rbi/server test",
     "dev:server": "pnpm --filter @rbi/server dev",
     "dev:desktop": "pnpm --filter @rbi/desktop dev",
     "build:db": "pnpm --filter @rbi/db build",

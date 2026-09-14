@@ -2,6 +2,20 @@ import { api } from "./api";
 
 const API_BASE = import.meta.env.VITE_API_URL ?? "http://localhost:4000/api";
 
+const BACKUP_UNLOCK_KEY = "backupUnlockToken";
+
+export function getBackupUnlock(): string | null {
+  return sessionStorage.getItem(BACKUP_UNLOCK_KEY);
+}
+
+export function setBackupUnlock(token: string): void {
+  sessionStorage.setItem(BACKUP_UNLOCK_KEY, token);
+}
+
+export function clearBackupUnlock(): void {
+  sessionStorage.removeItem(BACKUP_UNLOCK_KEY);
+}
+
 function authHeaders(): Record<string, string> {
   const headers: Record<string, string> = {};
   const token = localStorage.getItem("authToken");
@@ -9,6 +23,11 @@ function authHeaders(): Record<string, string> {
     headers["Authorization"] = `Bearer ${token}`;
   }
   return headers;
+}
+
+function unlockHeaders(): Record<string, string> {
+  const unlock = getBackupUnlock();
+  return unlock ? { "x-backup-unlock": unlock } : {};
 }
 
 export interface BarangaySettings {
@@ -64,6 +83,9 @@ function sseRequest<T>(
     }
     if (body) {
       xhr.setRequestHeader("Content-Type", "application/json");
+    }
+    for (const [key, value] of Object.entries(unlockHeaders())) {
+      xhr.setRequestHeader(key, value);
     }
 
     let buffer = "";
@@ -142,9 +164,12 @@ export const settingsService = {
   update: (data: BarangaySettings) =>
     api.put<BarangaySettings>("/settings", data),
 
+  verifyPassword: (password: string) =>
+    api.post<{ unlockToken: string }>("/settings/verify-password", { password }),
+
   backup: async (): Promise<BackupData> => {
     const res = await fetch(`${API_BASE}/settings/backup`, {
-      headers: authHeaders(),
+      headers: { ...authHeaders(), ...unlockHeaders() },
     });
     if (!res.ok) throw new Error("Backup failed");
     return res.json();

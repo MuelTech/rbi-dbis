@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 import { User } from '../types';
 import { useNavigate } from 'react-router-dom';
 import { authService, type AuthUser } from '../services/auth';
+import { clearBackupUnlock } from '../services/settings';
 
 interface AuthContextType {
   user: User | null;
@@ -44,6 +45,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setUser(null);
     localStorage.removeItem('authToken');
     localStorage.removeItem('currentUser');
+    clearBackupUnlock();
     navigate('/login');
   }, [navigate]);
 

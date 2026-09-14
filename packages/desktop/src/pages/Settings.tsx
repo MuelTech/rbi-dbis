@@ -2,8 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import ContentCard from '@/components/ui/ContentCard';
 import ConfirmationModal from '@/components/ui/ConfirmationModal';
-import { Image, MapPin, Users, Save, Upload, Settings as SettingsIcon, FileText, List, Plus, X, Database, Download, UploadCloud, History, FileUp, Loader2 } from 'lucide-react';
-import { settingsService, BarangaySettings, ProgressUpdate } from '@/services/settings';
+import { Image, MapPin, Users, Save, Upload, Settings as SettingsIcon, FileText, List, Plus, X, Database, Download, UploadCloud, History, FileUp, Loader2, Lock, Eye, EyeOff } from 'lucide-react';
+import { settingsService, BarangaySettings, ProgressUpdate, getBackupUnlock, setBackupUnlock, clearBackupUnlock } from '@/services/settings';
 
 interface SettingsProps {
     onShowSuccess?: (message: string) => void;
@@ -36,6 +36,37 @@ const Settings: React.FC<SettingsProps> = ({ onShowSuccess, setIsNavigationBlock
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [restoreError, setRestoreError] = useState<string | null>(null);
     const [progressModal, setProgressModal] = useState<{ type: 'backup' | 'restore'; progress: ProgressUpdate | null } | null>(null);
+
+    const [isUnlocked, setIsUnlocked] = useState<boolean>(() => !!getBackupUnlock());
+    const [unlockPassword, setUnlockPassword] = useState('');
+    const [showUnlockPassword, setShowUnlockPassword] = useState(false);
+    const [unlockError, setUnlockError] = useState<string | null>(null);
+    const [isUnlocking, setIsUnlocking] = useState(false);
+
+    const relock = () => {
+        clearBackupUnlock();
+        setIsUnlocked(false);
+        setUnlockPassword('');
+    };
+
+    const isLockError = (message: string) => /lock|unlock|expired/i.test(message);
+
+    const handleUnlock = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!unlockPassword) return;
+        setUnlockError(null);
+        setIsUnlocking(true);
+        try {
+            const { unlockToken } = await settingsService.verifyPassword(unlockPassword);
+            setBackupUnlock(unlockToken);
+            setIsUnlocked(true);
+            setUnlockPassword('');
+        } catch (err: any) {
+            setUnlockError(err?.message || 'Incorrect password');
+        } finally {
+            setIsUnlocking(false);
+        }
+    };
 
     const saveMutation = useMutation({
         mutationFn: (data: BarangaySettings) => settingsService.update(data),
@@ -71,6 +102,7 @@ const Settings: React.FC<SettingsProps> = ({ onShowSuccess, setIsNavigationBlock
             if (onShowSuccess) onShowSuccess('Backup downloaded successfully');
         } catch (err: any) {
             setProgressModal(null);
+            if (isLockError(err?.message || '')) relock();
             if (onShowSuccess) onShowSuccess(`Backup failed: ${err?.message || 'Unknown error'}`);
         } finally {
             setIsBackupRunning(false);
@@ -140,12 +172,15 @@ const Settings: React.FC<SettingsProps> = ({ onShowSuccess, setIsNavigationBlock
             await new Promise((r) => setTimeout(r, 400));
             setProgressModal(null);
             queryClient.invalidateQueries();
+            clearBackupUnlock();
+            setIsUnlocked(false);
             if (onShowSuccess) onShowSuccess('Data restored successfully. Please log in again.');
             if (setIsNavigationBlocked) setIsNavigationBlocked(false);
         } catch (err: any) {
             setProgressModal(null);
             const msg = err?.message || 'Restore failed';
             setRestoreError(msg);
+            if (isLockError(msg)) relock();
             if (onShowSuccess) onShowSuccess(`Restore failed: ${msg}`);
         } finally {
             setIsRestoreRunning(false);
@@ -448,6 +483,62 @@ const Settings: React.FC<SettingsProps> = ({ onShowSuccess, setIsNavigationBlock
                     )}
 
                     {activeTab === 'Backup & Restore' && (
+                        !isUnlocked ? (
+                        <div className="max-w-md mx-auto">
+                            <div className="bg-white rounded-2xl border border-gray-100 p-8 shadow-sm flex flex-col items-center text-center">
+                                <div className="w-14 h-14 bg-blue-50 rounded-xl flex items-center justify-center mb-4">
+                                    <Lock size={24} className="text-blue-600" />
+                                </div>
+                                <h2 className="text-lg font-bold text-gray-900 mb-2">Backup & Restore Locked</h2>
+                                <p className="text-sm text-gray-500 mb-6 max-w-xs">
+                                    Enter your password to access backup and restore.
+                                </p>
+
+                                <form onSubmit={handleUnlock} className="w-full space-y-5 text-left">
+                                    {unlockError && (
+                                        <div className="bg-red-50 text-red-500 text-sm p-3 rounded-xl text-center">
+                                            {unlockError}
+                                        </div>
+                                    )}
+
+                                    <div className="space-y-1.5">
+                                        <label className="text-xs font-semibold text-gray-500">Password</label>
+                                        <div className="relative">
+                                            <Lock size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                                            <input
+                                                type={showUnlockPassword ? 'text' : 'password'}
+                                                value={unlockPassword}
+                                                onChange={(e) => setUnlockPassword(e.target.value)}
+                                                placeholder="Enter your password"
+                                                autoFocus
+                                                className="w-full pl-10 pr-10 py-2.5 bg-white border border-gray-200 rounded-xl text-sm text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={() => setShowUnlockPassword(!showUnlockPassword)}
+                                                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                                            >
+                                                {showUnlockPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    <button
+                                        type="submit"
+                                        disabled={!unlockPassword || isUnlocking}
+                                        className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-all shadow-lg shadow-blue-200 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                                    >
+                                        {isUnlocking ? (
+                                            <Loader2 size={18} className="animate-spin" />
+                                        ) : (
+                                            <Lock size={18} />
+                                        )}
+                                        {isUnlocking ? 'Verifying...' : 'Unlock'}
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+                        ) : (
                         <div className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-6">
                             {/* Backup Data */}
                             <div className="bg-white rounded-2xl border border-gray-100 p-8 shadow-sm flex flex-col h-full">
@@ -597,6 +688,7 @@ const Settings: React.FC<SettingsProps> = ({ onShowSuccess, setIsNavigationBlock
                                 </div>
                             )}
                         </div>
+                        )
                     )}
                 </div>
 
