@@ -4,15 +4,25 @@ import ContentCard from '@/components/ui/ContentCard';
 import ConfirmationModal from '@/components/ui/ConfirmationModal';
 import { Image, MapPin, Users, Save, Upload, Settings as SettingsIcon, FileText, List, Plus, X, Database, Download, UploadCloud, History, FileUp, Loader2, Lock, Eye, EyeOff } from 'lucide-react';
 import { settingsService, BarangaySettings, ProgressUpdate, getBackupUnlock, setBackupUnlock, clearBackupUnlock } from '@/services/settings';
+import { useAuth } from '@/context/AuthContext';
 
 interface SettingsProps {
     onShowSuccess?: (message: string) => void;
     setIsNavigationBlocked?: (blocked: boolean) => void;
 }
 
+const LAST_BACKUP_META_KEY = 'rbiLastBackupMeta';
+
+interface BackupMetaDisplay {
+    version: number;
+    exportedAt: string;
+    total: number;
+}
+
 const Settings: React.FC<SettingsProps> = ({ onShowSuccess, setIsNavigationBlocked }) => {
     const [activeTab, setActiveTab] = useState('General Information');
     const queryClient = useQueryClient();
+    const { logout } = useAuth();
 
     const { data: settings, isLoading } = useQuery({
         queryKey: ['settings'],
@@ -31,6 +41,15 @@ const Settings: React.FC<SettingsProps> = ({ onShowSuccess, setIsNavigationBlock
 
     const [newPurpose, setNewPurpose] = useState('');
     const [lastBackup, setLastBackup] = useState<string | null>(null);
+    const [lastBackupMeta, setLastBackupMeta] = useState<BackupMetaDisplay | null>(() => {
+        const raw = localStorage.getItem(LAST_BACKUP_META_KEY);
+        if (!raw) return null;
+        try {
+            return JSON.parse(raw) as BackupMetaDisplay;
+        } catch {
+            return null;
+        }
+    });
     const [showRestoreConfirm, setShowRestoreConfirm] = useState(false);
     const [pendingRestoreFile, setPendingRestoreFile] = useState<File | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -99,6 +118,13 @@ const Settings: React.FC<SettingsProps> = ({ onShowSuccess, setIsNavigationBlock
             URL.revokeObjectURL(url);
             const now = new Date();
             setLastBackup(now.toLocaleString());
+            const meta: BackupMetaDisplay = {
+                version: data.version,
+                exportedAt: data.exportedAt,
+                total: data.meta?.total ?? 0,
+            };
+            setLastBackupMeta(meta);
+            localStorage.setItem(LAST_BACKUP_META_KEY, JSON.stringify(meta));
             if (onShowSuccess) onShowSuccess('Backup downloaded successfully');
         } catch (err: any) {
             setProgressModal(null);
@@ -165,6 +191,13 @@ const Settings: React.FC<SettingsProps> = ({ onShowSuccess, setIsNavigationBlock
                 setPendingRestoreFile(null);
                 return;
             }
+            if (!backup || typeof backup !== 'object' || Array.isArray(backup) || typeof backup.data !== 'object' || backup.data === null) {
+                setProgressModal(null);
+                if (onShowSuccess) onShowSuccess('Invalid backup file: missing backup data');
+                setIsRestoreRunning(false);
+                setPendingRestoreFile(null);
+                return;
+            }
             await settingsService.restoreWithProgress(backup, (update) => {
                 setProgressModal((prev) => prev ? { ...prev, progress: update } : null);
             });
@@ -176,6 +209,7 @@ const Settings: React.FC<SettingsProps> = ({ onShowSuccess, setIsNavigationBlock
             setIsUnlocked(false);
             if (onShowSuccess) onShowSuccess('Data restored successfully. Please log in again.');
             if (setIsNavigationBlocked) setIsNavigationBlocked(false);
+            setTimeout(() => logout(), 1200);
         } catch (err: any) {
             setProgressModal(null);
             const msg = err?.message || 'Restore failed';
@@ -563,6 +597,13 @@ const Settings: React.FC<SettingsProps> = ({ onShowSuccess, setIsNavigationBlock
                                             <span className="text-xs font-medium">Last Backup:</span>
                                         </div>
                                         <p className="text-sm font-bold text-gray-900">{lastBackup ?? 'No backup yet'}</p>
+                                        {lastBackupMeta && (
+                                            <div className="mt-2 space-y-0.5 text-xs text-gray-500">
+                                                <p>Version {lastBackupMeta.version}</p>
+                                                <p>Exported {new Date(lastBackupMeta.exportedAt).toLocaleString()}</p>
+                                                <p>{lastBackupMeta.total} total records</p>
+                                            </div>
+                                        )}
                                     </div>
 
                                     <button
@@ -636,6 +677,8 @@ const Settings: React.FC<SettingsProps> = ({ onShowSuccess, setIsNavigationBlock
                                 onConfirm={handleRestoreConfirm}
                                 title="Restore Backup?"
                                 message={`This will overwrite all current data with the contents of "${pendingRestoreFile?.name}". This action cannot be undone. Continue?`}
+                                confirmPhrase="RESTORE"
+                                confirmText="Restore"
                             />
 
                             {/* Progress Modal */}

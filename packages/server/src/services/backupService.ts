@@ -2,10 +2,11 @@ import { prisma, Prisma } from "@rbi/db";
 import {
   BACKUP_VERSION,
   validateBackup,
+  summarizeBackup,
   type BackupPayload,
 } from "./backupValidation.js";
 
-export { BACKUP_VERSION, validateBackup };
+export { BACKUP_VERSION, validateBackup, summarizeBackup };
 export type { BackupPayload };
 
 const RESTORE_TRANSACTION_TIMEOUT_MS = 120_000;
@@ -85,6 +86,7 @@ export async function buildBackup(onProgress: ProgressReporter): Promise<BackupP
     version: BACKUP_VERSION,
     exportedAt: new Date().toISOString(),
     data,
+    meta: summarizeBackup(data),
   };
 }
 

@@ -1,9 +1,15 @@
 export const BACKUP_VERSION = 2;
 
+export interface BackupMeta {
+  counts: Record<string, number>;
+  total: number;
+}
+
 export interface BackupPayload {
   version: number;
   exportedAt: string;
   data: Record<string, any>;
+  meta: BackupMeta;
 }
 
 export function validateBackup(payload: any): string | null {
@@ -20,4 +26,15 @@ export function validateBackup(payload: any): string | null {
     return "Backup file is missing data";
   }
   return null;
+}
+
+export function summarizeBackup(data: Record<string, any>): BackupMeta {
+  const counts: Record<string, number> = {};
+  let total = 0;
+  for (const [key, value] of Object.entries(data)) {
+    const count = Array.isArray(value) ? value.length : value ? 1 : 0;
+    counts[key] = count;
+    total += count;
+  }
+  return { counts, total };
 }

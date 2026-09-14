@@ -1,4 +1,5 @@
 import { api } from "./api";
+import { createSseParser } from "./sse";
 
 const API_BASE = import.meta.env.VITE_API_URL ?? "http://localhost:4000/api";
 
@@ -54,10 +55,16 @@ export interface BarangaySettings {
   purposes: string[];
 }
 
+export interface BackupMeta {
+  counts: Record<string, number>;
+  total: number;
+}
+
 export interface BackupData {
   version: number;
   exportedAt: string;
   data: Record<string, any>;
+  meta?: BackupMeta;
 }
 
 export interface ProgressUpdate {
@@ -88,61 +95,27 @@ function sseRequest<T>(
       xhr.setRequestHeader(key, value);
     }
 
-    let buffer = "";
     let lastLen = 0;
+    const parser = createSseParser({
+      onProgress: (parsed) => onProgress(parsed as ProgressUpdate),
+    });
 
     xhr.onprogress = () => {
       const text = xhr.responseText;
       if (text.length === lastLen) return;
-      const chunk = text.slice(lastLen);
+      parser.push(text.slice(lastLen));
       lastLen = text.length;
-      buffer += chunk;
-
-      const lines = buffer.split("\n");
-      buffer = lines.pop() || "";
-
-      let currentEvent = "";
-      for (const line of lines) {
-        if (line.startsWith("event: ")) {
-          currentEvent = line.slice(7).trim();
-        } else if (line.startsWith("data: ")) {
-          const data = line.slice(6);
-          try {
-            const parsed = JSON.parse(data);
-            if (currentEvent === "progress") {
-              onProgress(parsed);
-            }
-          } catch {
-            // skip
-          }
-        }
-      }
     };
 
     xhr.onload = () => {
-      // process any remaining buffer
-      const lines = buffer.split("\n");
-      let currentEvent = "";
-      let result: any = null;
-
-      for (const line of lines) {
-        if (line.startsWith("event: ")) {
-          currentEvent = line.slice(7).trim();
-        } else if (line.startsWith("data: ")) {
-          const data = line.slice(6);
-          try {
-            const parsed = JSON.parse(data);
-            if (currentEvent === "progress") {
-              onProgress(parsed);
-            } else if (currentEvent === "complete" || currentEvent === "error") {
-              result = parsed;
-            }
-          } catch {
-            // skip
-          }
-        }
+      const text = xhr.responseText;
+      if (text.length > lastLen) {
+        parser.push(text.slice(lastLen));
+        lastLen = text.length;
       }
+      parser.flush();
 
+      const result = parser.getResult();
       if (xhr.status >= 200 && xhr.status < 300) {
         if (result?.error) {
           reject(new Error(result.error));

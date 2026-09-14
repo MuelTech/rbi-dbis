@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { BACKUP_VERSION, validateBackup } from "./backupValidation.js";
+import { BACKUP_VERSION, summarizeBackup, validateBackup } from "./backupValidation.js";
 
 describe("validateBackup", () => {
   it("rejects a non-object payload", () => {
@@ -37,5 +37,23 @@ describe("validateBackup", () => {
 
   it("accepts a legacy v1 payload for backward compatibility", () => {
     expect(validateBackup({ version: 1, data: {} })).toBeNull();
+  });
+});
+
+describe("summarizeBackup", () => {
+  it("counts arrays by length and singletons as one", () => {
+    const meta = summarizeBackup({
+      settings: { slogan: "x" },
+      residents: [1, 2, 3],
+      orders: [],
+    });
+    expect(meta.counts).toEqual({ settings: 1, residents: 3, orders: 0 });
+    expect(meta.total).toBe(4);
+  });
+
+  it("returns zero for empty data", () => {
+    const meta = summarizeBackup({});
+    expect(meta.counts).toEqual({});
+    expect(meta.total).toBe(0);
   });
 });
