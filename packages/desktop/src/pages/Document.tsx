@@ -31,6 +31,8 @@ const Document: React.FC<DocumentProps> = ({ setIsNavigationBlocked }) => {
   // Confirmation Modal State
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [isIssuing, setIsIssuing] = useState(false);
+  const [showIssueActions, setShowIssueActions] = useState(false);
+  const [issuePdfName, setIssuePdfName] = useState('document.pdf');
 
   // Pre-fill State
   const [previousDocumentData, setPreviousDocumentData] = useState<{
@@ -238,8 +240,7 @@ const Document: React.FC<DocumentProps> = ({ setIsNavigationBlocked }) => {
 
       setShowConfirmModal(false);
 
-      // Build a meaningful default file name and generate the PDF via Electron's
-      // printToPDF + save dialog (window.print() can't set the saved name).
+      // Build a meaningful default file name for the Save-as-PDF option.
       const sanitize = (s: string) =>
         s
           .replace(/[\\/:*?"<>|]+/g, "_")
@@ -249,38 +250,57 @@ const Document: React.FC<DocumentProps> = ({ setIsNavigationBlocked }) => {
       const residentName = formData.selectedResident || "Resident";
       const docName = activeConfig?.name || documentType;
       const dateStr = new Date().toISOString().slice(0, 10);
-      const defaultFilename = `${sanitize(residentName)}_${sanitize(docName)}_${dateStr}.pdf`;
+      setIssuePdfName(
+        `${sanitize(residentName)}_${sanitize(docName)}_${dateStr}.pdf`
+      );
 
-      // Wait for the preview (OR number) to render before capturing the PDF.
-      setTimeout(async () => {
-        try {
-          if (window.electronAPI) {
-            const res: any = await window.electronAPI.invoke(
-              "save-pdf",
-              defaultFilename
-            );
-            if (res?.error) throw new Error(res.error);
-          } else {
-            // Not running in Electron (e.g. browser dev) — use the print dialog.
-            window.print();
-          }
-        } catch (err: any) {
-          alert(
-            `The document was issued, but saving the PDF failed: ${
-              err?.message ?? "unknown error"
-            }`
-          );
-        } finally {
-          resetForm();
-          setStep(1);
-          setIsIssuing(false);
-        }
+      // Wait for the preview to render the OR number, then let the user
+      // choose to save the PDF or print it.
+      setTimeout(() => {
+        setShowIssueActions(true);
+        setIsIssuing(false);
       }, 150);
     } catch (err) {
       alert('Failed to create document. Please try again.');
       setShowConfirmModal(false);
       setIsIssuing(false);
     }
+  };
+
+  const finalizeIssue = () => {
+    setShowIssueActions(false);
+    resetForm();
+    setStep(1);
+  };
+
+  const handleSavePdf = async () => {
+    setShowIssueActions(false);
+    try {
+      if (window.electronAPI) {
+        const res: any = await window.electronAPI.invoke("save-pdf", issuePdfName);
+        if (res?.error) throw new Error(res.error);
+      } else {
+        // Not running in Electron (e.g. browser dev) — fall back to print.
+        window.print();
+      }
+    } catch (err: any) {
+      alert(
+        `The document was issued, but saving the PDF failed: ${
+          err?.message ?? "unknown error"
+        }`
+      );
+    } finally {
+      finalizeIssue();
+    }
+  };
+
+  const handlePrintDocument = () => {
+    setShowIssueActions(false);
+    // Let the modal unmount before printing so it isn't captured.
+    setTimeout(() => {
+      window.print();
+      finalizeIssue();
+    }, 150);
   };
 
   const handleCancelIssue = () => {
@@ -570,6 +590,37 @@ const Document: React.FC<DocumentProps> = ({ setIsNavigationBlocked }) => {
         cancelText="Cancel"
         isLoading={isIssuing}
       />
+
+      {/* Post-issue actions: save a named PDF or print */}
+      {showIssueActions && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 print:hidden">
+          <div className="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-sm mx-4">
+            <div className="flex flex-col items-center text-center">
+              <div className="w-14 h-14 bg-green-50 rounded-xl flex items-center justify-center mb-4">
+                <CheckCircle className="w-7 h-7 text-green-600" />
+              </div>
+              <h3 className="text-lg font-bold text-gray-900 mb-1">Document Issued</h3>
+              <p className="text-sm text-gray-500 mb-6">
+                Save it as a PDF, or send it to a printer.
+              </p>
+              <div className="flex flex-col gap-3 w-full">
+                <button
+                  onClick={handleSavePdf}
+                  className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-all shadow-lg shadow-blue-200 active:scale-95"
+                >
+                  <FileText size={18} /> Save PDF
+                </button>
+                <button
+                  onClick={handlePrintDocument}
+                  className="w-full bg-white border border-gray-200 text-gray-700 py-3 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-gray-50 transition-all active:scale-95"
+                >
+                  <Printer size={18} /> Print
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </ContentCard>
   );
 };
