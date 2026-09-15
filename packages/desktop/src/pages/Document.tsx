@@ -238,10 +238,25 @@ const Document: React.FC<DocumentProps> = ({ setIsNavigationBlocked }) => {
 
       setShowConfirmModal(false);
 
+      // Give the saved/printed document a meaningful file name. Chromium derives
+      // the "Save as PDF" file name from the document title.
+      const originalTitle = document.title;
+      const sanitize = (s: string) =>
+        s
+          .replace(/[\\/:*?"<>|]+/g, "_")
+          .replace(/\s+/g, "_")
+          .replace(/_+/g, "_")
+          .replace(/^_+|_+$/g, "");
+      const residentName = formData.selectedResident || "Resident";
+      const docName = activeConfig?.name || documentType;
+      const dateStr = new Date().toISOString().slice(0, 10);
+      document.title = `${sanitize(residentName)}_${sanitize(docName)}_${dateStr}`;
+
       // Wait for state to update before printing
       setTimeout(() => {
         window.print();
         setTimeout(() => {
+          document.title = originalTitle;
           resetForm();
           setStep(1);
           setIsIssuing(false);
