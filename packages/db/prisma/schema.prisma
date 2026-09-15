@@ -188,6 +188,7 @@ model User {
   lastLogin  DateTime? @map("last_login")
   permission String?   @db.VarChar(50)
   mustChangePassword Boolean   @default(false) @map("must_change_password")
+  tokenVersion Int      @default(0) @map("token_version")
   createdAt  DateTime  @default(now()) @map("created_at")
   updatedAt  DateTime  @updatedAt @map("updated_at")
 

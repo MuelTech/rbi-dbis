@@ -3,6 +3,7 @@ import { User } from '../types';
 import { useNavigate } from 'react-router-dom';
 import { authService, type AuthUser } from '../services/auth';
 import { clearBackupUnlock } from '../services/settings';
+import { setUnauthorizedHandler } from '../services/api';
 
 interface AuthContextType {
   user: User | null;
@@ -49,9 +50,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     navigate('/login');
   }, [navigate]);
 
+  // Any 401 from the API means our session was revoked (restore / password
+  // change on another device): drop straight to the login screen.
+  useEffect(() => {
+    setUnauthorizedHandler(() => logout());
+    return () => setUnauthorizedHandler(null);
+  }, [logout]);
+
   const changePassword = useCallback(async (newPassword: string): Promise<boolean> => {
     try {
-      await authService.changePassword(newPassword);
+      const { token } = await authService.changePassword(newPassword);
+      // The server revoked all other sessions and returned a fresh token so
+      // this device stays signed in.
+      localStorage.setItem('authToken', token);
       setMustChangePassword(false);
       setUser(prev => prev ? { ...prev, mustChangePassword: false } : null);
       return true;

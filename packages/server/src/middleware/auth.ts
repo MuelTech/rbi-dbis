@@ -1,12 +1,13 @@
 import type { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
 import { prisma } from "@rbi/db";
-import { isTokenAfterCutoff } from "../services/sessionPolicy.js";
+import { isTokenAfterCutoff, isTokenVersionCurrent } from "../services/sessionPolicy.js";
 
 export interface JwtPayload {
   sub: string;
   username: string;
   iat?: number;
+  tv?: number;
 }
 
 declare global {
@@ -46,6 +47,7 @@ export function requireAuth(req: Request, res: Response, next: NextFunction) {
           roleType: true,
           isActive: true,
           permission: true,
+          tokenVersion: true,
         },
       }),
       prisma.sessionState.findFirst({
@@ -55,6 +57,12 @@ export function requireAuth(req: Request, res: Response, next: NextFunction) {
       .then(([user, sessionState]) => {
         if (!user || !user.isActive) {
           res.status(401).json({ error: "User inactive or not found" });
+          return;
+        }
+        if (!isTokenVersionCurrent(decoded.tv, user.tokenVersion)) {
+          res
+            .status(401)
+            .json({ error: "Session has been reset. Please log in again." });
           return;
         }
         if (

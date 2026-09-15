@@ -12,3 +12,16 @@ export function isTokenAfterCutoff(
   if (typeof iatSeconds !== "number") return false;
   return iatSeconds * 1000 >= cutoff.getTime();
 }
+
+/**
+ * Per-user session invalidation. Each login embeds the user's current
+ * `tokenVersion`; changing a password increments it, so any token carrying an
+ * older version is rejected. Tokens issued before this field existed have no
+ * version and are treated as 0.
+ */
+export function isTokenVersionCurrent(
+  tokenVersion: number | undefined,
+  currentVersion: number
+): boolean {
+  return (tokenVersion ?? 0) === currentVersion;
+}

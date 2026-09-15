@@ -1,4 +1,4 @@
-import { api } from "./api";
+import { api, notifyUnauthorized } from "./api";
 import { createSseParser } from "./sse";
 
 const API_BASE = import.meta.env.VITE_API_URL ?? "http://localhost:4000/api";
@@ -123,6 +123,7 @@ function sseRequest<T>(
           resolve(result as T);
         }
       } else {
+        if (xhr.status === 401) notifyUnauthorized();
         reject(new Error(`Request failed: ${xhr.status}`));
       }
     };

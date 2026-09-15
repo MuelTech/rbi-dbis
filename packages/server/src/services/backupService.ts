@@ -278,6 +278,7 @@ const RESTORE_STEPS: RestoreStep[] = [
             permission: user.permission,
             lastLogin: user.lastLogin ? new Date(user.lastLogin) : null,
             mustChangePassword: user.mustChangePassword ?? false,
+            tokenVersion: user.tokenVersion ?? 0,
             ...(user.userInfo && {
               userInfo: {
                 create: {

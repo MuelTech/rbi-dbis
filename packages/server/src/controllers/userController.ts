@@ -122,10 +122,15 @@ export async function updateUser(
         data.password = await bcrypt.hash(data.password, SALT_ROUNDS);
       }
     }
+    // Only revoke sessions when the password actually changes (the client may
+    // echo back the existing bcrypt hash on unrelated edits).
+    const passwordChanged =
+      Boolean(data.password) && data.password !== oldUser?.password;
     const user = await prisma.user.update({
       where: { id },
       data: {
         ...data,
+        ...(passwordChanged && { tokenVersion: { increment: 1 } }),
         ...(userInfoFields && {
           userInfo: {
             upsert: {
