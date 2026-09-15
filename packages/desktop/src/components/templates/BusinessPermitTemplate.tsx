@@ -1,4 +1,5 @@
 import React from 'react';
+import Letterhead from '@/components/templates/Letterhead';
 
 const BusinessPermitTemplate: React.FC<{ data: any }> = ({ data }) => {
   const {
@@ -17,15 +18,11 @@ const BusinessPermitTemplate: React.FC<{ data: any }> = ({ data }) => {
   } = data;
 
   return (
-    <div className="bg-white w-full max-w-[210mm] min-h-[297mm] shadow-lg p-[20mm] relative text-gray-900 print:shadow-none print:w-full print:max-w-none">
-      {/* Document Header */}
-      <div className="text-center mb-12">
-        <p className="text-[10pt] tracking-widest uppercase text-gray-500 mb-1">Republic of the Philippines</p>
-        <p className="text-[10pt] tracking-widest uppercase text-gray-500 mb-2">City of Manila</p>
-        <h1 className="text-[16pt] font-bold text-blue-900 uppercase mb-1">{barangayName || 'BARANGAY 418'} ZONE 43 DISTRICT IV</h1>
-        <p className="text-[9pt] font-bold tracking-widest uppercase text-gray-600">Office of the Barangay Chairman</p>
-      </div>
+    <div className="bg-white w-full max-w-[210mm] min-h-[297mm] shadow-lg relative text-gray-900 print:shadow-none print:w-full print:max-w-none">
+      {/* Official letterhead (full-bleed) */}
+      <Letterhead barangayName={barangayName} />
 
+      <div className="relative px-[20mm] pb-[20mm]">
       {/* Document Title */}
       <div className="text-center mb-12">
         <h2 className="text-[18pt] font-serif font-bold uppercase border-b-2 border-black inline-block pb-1">Business Clearance</h2>
@@ -83,6 +80,8 @@ const BusinessPermitTemplate: React.FC<{ data: any }> = ({ data }) => {
           <span>OR Number:</span>
           <span>{data.orNumber || 'N/A'}</span>
         </div>
+      </div>
+
       </div>
 
       {/* Watermark/Seal Placeholder */}
