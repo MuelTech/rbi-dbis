@@ -149,6 +149,7 @@ const RESTORE_STEPS: RestoreStep[] = [
         await tx.household.createMany({
           data: data.households.map((h: any) => ({
             id: h.id,
+            displayId: h.displayId,
             brgyHouseholdNo: h.brgyHouseholdNo,
             blockId: h.blockId,
           })),
@@ -163,6 +164,7 @@ const RESTORE_STEPS: RestoreStep[] = [
         await tx.resident.createMany({
           data: data.residents.map((r: any) => ({
             id: r.id,
+            displayId: r.displayId,
             lastName: r.lastName,
             firstName: r.firstName,
             middleName: r.middleName,
@@ -212,6 +214,7 @@ const RESTORE_STEPS: RestoreStep[] = [
         await tx.family.create({
           data: {
             id: family.id,
+            displayId: family.displayId,
             familyName: family.familyName,
             isArchived: family.isArchived,
             householdId: family.householdId,
@@ -272,6 +275,7 @@ const RESTORE_STEPS: RestoreStep[] = [
         await tx.user.create({
           data: {
             id: user.id,
+            displayId: user.displayId,
             username: user.username,
             password: user.password,
             roleType: user.roleType,
@@ -335,6 +339,7 @@ const RESTORE_STEPS: RestoreStep[] = [
         await tx.document.create({
           data: {
             id: doc.id,
+            displayId: doc.displayId,
             issueDate: new Date(doc.issueDate),
             purpose: doc.purpose,
             validityPeriod: doc.validityPeriod,
@@ -362,6 +367,7 @@ const RESTORE_STEPS: RestoreStep[] = [
         await tx.order.createMany({
           data: data.orders.map((order: any) => ({
             id: order.id,
+            displayId: order.displayId,
             orNumber: order.orNumber,
             orderDate: new Date(order.orderDate),
             amount: order.amount,
