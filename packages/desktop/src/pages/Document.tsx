@@ -255,13 +255,21 @@ const Document: React.FC<DocumentProps> = ({ setIsNavigationBlocked }) => {
       setTimeout(async () => {
         try {
           if (window.electronAPI) {
-            await window.electronAPI.invoke("save-pdf", defaultFilename);
+            const res: any = await window.electronAPI.invoke(
+              "save-pdf",
+              defaultFilename
+            );
+            if (res?.error) throw new Error(res.error);
           } else {
+            // Not running in Electron (e.g. browser dev) — use the print dialog.
             window.print();
           }
-        } catch {
-          // Fall back to the system print dialog if the IPC path fails.
-          window.print();
+        } catch (err: any) {
+          alert(
+            `The document was issued, but saving the PDF failed: ${
+              err?.message ?? "unknown error"
+            }`
+          );
         } finally {
           resetForm();
           setStep(1);
