@@ -298,9 +298,29 @@ const RESTORE_STEPS: RestoreStep[] = [
   {
     label: "Restoring document types...",
     run: async (tx, data, ctx) => {
+      // System document types are protected: a restore never deletes them,
+      // so a backup that lacks them cannot wipe the required baseline.
+      const existingSystem = await tx.documentType.findMany({
+        where: { isSystem: true },
+        select: { id: true, documentName: true },
+      });
+      const systemByName = new Map(
+        existingSystem.map((d) => [d.documentName, d.id])
+      );
+
       for (const dt of data.documentTypes ?? []) {
+        const systemId = systemByName.get(dt.documentName);
+        if (systemId) {
+          // Keep the protected row (and its id) as-is.
+          ctx.documentTypeMap.set(dt.id, systemId);
+          continue;
+        }
         const created = await tx.documentType.create({
-          data: { documentName: dt.documentName, amount: dt.amount },
+          data: {
+            documentName: dt.documentName,
+            amount: dt.amount,
+            isSystem: dt.isSystem ?? false,
+          },
         });
         ctx.documentTypeMap.set(dt.id, created.id);
       }
@@ -387,7 +407,7 @@ async function clearAll(tx: Prisma.TransactionClient) {
   await tx.documentSigner.deleteMany();
   await tx.order.deleteMany();
   await tx.document.deleteMany();
-  await tx.documentType.deleteMany();
+  await tx.documentType.deleteMany({ where: { isSystem: false } });
   await tx.barangayOfficial.deleteMany();
   await tx.familyMember.deleteMany();
   await tx.familyPet.deleteMany();
