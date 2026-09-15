@@ -330,13 +330,7 @@ const Document: React.FC<DocumentProps> = ({ setIsNavigationBlocked }) => {
                     <CustomDropdown
                         value={purpose}
                         onChange={setPurpose}
-                        options={[
-                        'Employment',
-                        'Scholarship',
-                        'Business Permit',
-                        'Proof of Residency',
-                        'Other'
-                        ]}
+                        options={Array.from(new Set([...(settings.purposes ?? []), 'Other']))}
                         placeholder="Select Purpose"
                     />
                     </div>
