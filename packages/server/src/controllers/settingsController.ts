@@ -185,6 +185,15 @@ export async function restoreData(
       sendSSE(res, "progress", progress)
     );
 
+    // Invalidate every existing session: any client that was active before
+    // this restore must re-authenticate against the restored data.
+    const now = new Date();
+    await prisma.sessionState.upsert({
+      where: { id: "global" },
+      update: { sessionsValidAfter: now },
+      create: { id: "global", sessionsValidAfter: now },
+    });
+
     const userId = req.user?.id;
     if (userId) {
       await logAction("settings", "1", userId, "RESTORE", null, "Restored data from backup");

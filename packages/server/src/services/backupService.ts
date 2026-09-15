@@ -48,6 +48,8 @@ export const HANDLED_MODELS: Record<Prisma.ModelName, true> = {
   BarangayOfficial: true,
   AuditTrail: true,
   BarangaySetting: true,
+  // Infrastructure state, intentionally NOT exported/restored by backup.
+  SessionState: true,
 };
 
 const EXPORT_STEPS: { key: string; label: string; run: () => Promise<any> }[] = [
@@ -114,9 +116,12 @@ const RESTORE_STEPS: RestoreStep[] = [
   {
     label: "Restoring blocks...",
     run: async (tx, data) => {
-      for (const block of data.blocks ?? []) {
-        await tx.block.create({
-          data: { id: block.id, blockNumber: block.blockNumber },
+      if (data.blocks?.length) {
+        await tx.block.createMany({
+          data: data.blocks.map((block: any) => ({
+            id: block.id,
+            blockNumber: block.blockNumber,
+          })),
         });
       }
     },
@@ -124,14 +129,14 @@ const RESTORE_STEPS: RestoreStep[] = [
   {
     label: "Restoring records...",
     run: async (tx, data) => {
-      for (const record of data.records ?? []) {
-        await tx.record.create({
-          data: {
+      if (data.records?.length) {
+        await tx.record.createMany({
+          data: data.records.map((record: any) => ({
             id: record.id,
             hasRecord: record.hasRecord,
             recordDate: record.recordDate ? new Date(record.recordDate) : null,
             description: record.description,
-          },
+          })),
         });
       }
     },
@@ -139,9 +144,13 @@ const RESTORE_STEPS: RestoreStep[] = [
   {
     label: "Restoring households...",
     run: async (tx, data) => {
-      for (const h of data.households ?? []) {
-        await tx.household.create({
-          data: { id: h.id, brgyHouseholdNo: h.brgyHouseholdNo, blockId: h.blockId },
+      if (data.households?.length) {
+        await tx.household.createMany({
+          data: data.households.map((h: any) => ({
+            id: h.id,
+            brgyHouseholdNo: h.brgyHouseholdNo,
+            blockId: h.blockId,
+          })),
         });
       }
     },
@@ -149,9 +158,9 @@ const RESTORE_STEPS: RestoreStep[] = [
   {
     label: "Restoring residents...",
     run: async (tx, data) => {
-      for (const r of data.residents ?? []) {
-        await tx.resident.create({
-          data: {
+      if (data.residents?.length) {
+        await tx.resident.createMany({
+          data: data.residents.map((r: any) => ({
             id: r.id,
             lastName: r.lastName,
             firstName: r.firstName,
@@ -171,7 +180,7 @@ const RESTORE_STEPS: RestoreStep[] = [
             occupationType: r.occupationType,
             profileImage: r.profileImage,
             recordId: r.recordId,
-          },
+          })),
         });
       }
     },
@@ -243,14 +252,14 @@ const RESTORE_STEPS: RestoreStep[] = [
   {
     label: "Restoring barangay officials...",
     run: async (tx, data) => {
-      for (const official of data.barangayOfficials ?? []) {
-        await tx.barangayOfficial.create({
-          data: {
+      if (data.barangayOfficials?.length) {
+        await tx.barangayOfficial.createMany({
+          data: data.barangayOfficials.map((official: any) => ({
             id: official.id,
             firstName: official.firstName,
             lastName: official.lastName,
             roleType: official.roleType,
-          },
+          })),
         });
       }
     },
@@ -327,9 +336,9 @@ const RESTORE_STEPS: RestoreStep[] = [
   {
     label: "Restoring orders...",
     run: async (tx, data) => {
-      for (const order of data.orders ?? []) {
-        await tx.order.create({
-          data: {
+      if (data.orders?.length) {
+        await tx.order.createMany({
+          data: data.orders.map((order: any) => ({
             id: order.id,
             orNumber: order.orNumber,
             orderDate: new Date(order.orderDate),
@@ -337,7 +346,7 @@ const RESTORE_STEPS: RestoreStep[] = [
             userId: order.userId,
             residentId: order.residentId,
             documentId: order.documentId,
-          },
+          })),
         });
       }
     },
@@ -345,9 +354,9 @@ const RESTORE_STEPS: RestoreStep[] = [
   {
     label: "Restoring activity logs...",
     run: async (tx, data) => {
-      for (const log of data.auditTrails ?? []) {
-        await tx.auditTrail.create({
-          data: {
+      if (data.auditTrails?.length) {
+        await tx.auditTrail.createMany({
+          data: data.auditTrails.map((log: any) => ({
             id: log.id,
             tableName: log.tableName,
             recordId: log.recordId,
@@ -356,7 +365,7 @@ const RESTORE_STEPS: RestoreStep[] = [
             ...(log.changes != null ? { changes: log.changes } : {}),
             summary: log.summary,
             userId: log.userId,
-          },
+          })),
         });
       }
     },

@@ -19,6 +19,16 @@ interface BackupMetaDisplay {
     total: number;
 }
 
+function downloadJson(data: unknown, filename: string) {
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+}
+
 const Settings: React.FC<SettingsProps> = ({ onShowSuccess, setIsNavigationBlocked }) => {
     const [activeTab, setActiveTab] = useState('General Information');
     const queryClient = useQueryClient();
@@ -54,7 +64,7 @@ const Settings: React.FC<SettingsProps> = ({ onShowSuccess, setIsNavigationBlock
     const [pendingRestoreFile, setPendingRestoreFile] = useState<File | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [restoreError, setRestoreError] = useState<string | null>(null);
-    const [progressModal, setProgressModal] = useState<{ type: 'backup' | 'restore'; progress: ProgressUpdate | null } | null>(null);
+    const [progressModal, setProgressModal] = useState<{ type: 'backup' | 'restore'; progress: ProgressUpdate | null; label?: string } | null>(null);
 
     const [isUnlocked, setIsUnlocked] = useState<boolean>(() => !!getBackupUnlock());
     const [unlockPassword, setUnlockPassword] = useState('');
@@ -109,13 +119,7 @@ const Settings: React.FC<SettingsProps> = ({ onShowSuccess, setIsNavigationBlock
             // Small delay so user sees 100% before modal closes
             await new Promise((r) => setTimeout(r, 400));
             setProgressModal(null);
-            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `rbi-backup-${new Date().toISOString().slice(0, 10)}.json`;
-            a.click();
-            URL.revokeObjectURL(url);
+            downloadJson(data, `rbi-backup-${new Date().toISOString().slice(0, 10)}.json`);
             const now = new Date();
             setLastBackup(now.toLocaleString());
             const meta: BackupMetaDisplay = {
@@ -178,26 +182,41 @@ const Settings: React.FC<SettingsProps> = ({ onShowSuccess, setIsNavigationBlock
         setShowRestoreConfirm(false);
         setIsRestoreRunning(true);
         setRestoreError(null);
-        setProgressModal({ type: 'restore', progress: null });
         try {
             const text = await pendingRestoreFile.text();
             let backup;
             try {
                 backup = JSON.parse(text);
             } catch {
-                setProgressModal(null);
                 if (onShowSuccess) onShowSuccess('Invalid backup file: not valid JSON');
                 setIsRestoreRunning(false);
                 setPendingRestoreFile(null);
                 return;
             }
             if (!backup || typeof backup !== 'object' || Array.isArray(backup) || typeof backup.data !== 'object' || backup.data === null) {
-                setProgressModal(null);
                 if (onShowSuccess) onShowSuccess('Invalid backup file: missing backup data');
                 setIsRestoreRunning(false);
                 setPendingRestoreFile(null);
                 return;
             }
+
+            // Download a safety copy of the current data before overwriting anything.
+            setProgressModal({ type: 'backup', progress: null, label: 'Saving safety backup...' });
+            try {
+                const safety = await settingsService.backupWithProgress((update) => {
+                    setProgressModal((prev) => prev ? { ...prev, progress: update } : null);
+                });
+                downloadJson(safety, `rbi-pre-restore-${new Date().toISOString().slice(0, 10)}.json`);
+            } catch (err: any) {
+                setProgressModal(null);
+                if (isLockError(err?.message || '')) relock();
+                if (onShowSuccess) onShowSuccess(`Restore cancelled: could not save safety backup (${err?.message || 'unknown error'})`);
+                setIsRestoreRunning(false);
+                setPendingRestoreFile(null);
+                return;
+            }
+
+            setProgressModal({ type: 'restore', progress: null });
             await settingsService.restoreWithProgress(backup, (update) => {
                 setProgressModal((prev) => prev ? { ...prev, progress: update } : null);
             });
@@ -697,7 +716,7 @@ const Settings: React.FC<SettingsProps> = ({ onShowSuccess, setIsNavigationBlock
                                             </div>
 
                                             <h3 className="text-lg font-bold text-gray-900 mb-1">
-                                                {progressModal.type === 'backup' ? 'Backing Up Data' : 'Restoring Data'}
+                                                {progressModal.label ?? (progressModal.type === 'backup' ? 'Backing Up Data' : 'Restoring Data')}
                                             </h3>
 
                                             {progressModal.progress ? (

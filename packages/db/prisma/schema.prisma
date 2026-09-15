@@ -325,6 +325,15 @@ model BarangaySetting {
   @@map("barangay_settings")
 }
 
+// ─── SessionState ────────────────────────────────────────────────────────────
+
+model SessionState {
+  id                 String   @id @default("global")
+  sessionsValidAfter DateTime @default(now()) @map("sessions_valid_after")
+
+  @@map("session_state")
+}
+
 // ─── Enums ───────────────────────────────────────────────────────────────────
 
 enum Sex {
