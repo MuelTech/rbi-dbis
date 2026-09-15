@@ -27,5 +27,7 @@ export const authService = {
   me: () => api.get<AuthUser>("/auth/me"),
 
   changePassword: (newPassword: string) =>
-    api.put<{ success: boolean }>("/auth/change-password", { newPassword }),
+    api.put<{ success: boolean; token: string }>("/auth/change-password", {
+      newPassword,
+    }),
 };

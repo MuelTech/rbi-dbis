@@ -1,10 +1,8 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { Lock, Eye, EyeOff, Loader2 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 
 const ChangePassword: React.FC = () => {
-  const navigate = useNavigate();
   const { changePassword } = useAuth();
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -33,11 +31,10 @@ const ChangePassword: React.FC = () => {
     const success = await changePassword(newPassword);
     setLoading(false);
 
-    if (success) {
-      navigate('/dashboard');
-    } else {
+    if (!success) {
       setError('Failed to change password. Please try again.');
     }
+    // On success the session is revoked server-side and App redirects to /login.
   };
 
   return (

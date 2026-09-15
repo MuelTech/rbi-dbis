@@ -1,10 +1,13 @@
 import type { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
 import { prisma } from "@rbi/db";
+import { isTokenAfterCutoff, isTokenVersionCurrent } from "../services/sessionPolicy.js";
 
 export interface JwtPayload {
   sub: string;
   username: string;
+  iat?: number;
+  tv?: number;
 }
 
 declare global {
@@ -35,8 +38,8 @@ export function requireAuth(req: Request, res: Response, next: NextFunction) {
   try {
     const decoded = jwt.verify(token, JWT_SECRET) as JwtPayload;
 
-    prisma.user
-      .findUnique({
+    Promise.all([
+      prisma.user.findUnique({
         where: { id: decoded.sub },
         select: {
           id: true,
@@ -44,11 +47,33 @@ export function requireAuth(req: Request, res: Response, next: NextFunction) {
           roleType: true,
           isActive: true,
           permission: true,
+          tokenVersion: true,
         },
-      })
-      .then((user) => {
+      }),
+      prisma.sessionState.findFirst({
+        select: { sessionsValidAfter: true },
+      }),
+    ])
+      .then(([user, sessionState]) => {
         if (!user || !user.isActive) {
           res.status(401).json({ error: "User inactive or not found" });
+          return;
+        }
+        if (!isTokenVersionCurrent(decoded.tv, user.tokenVersion)) {
+          res
+            .status(401)
+            .json({ error: "Session has been reset. Please log in again." });
+          return;
+        }
+        if (
+          !isTokenAfterCutoff(
+            decoded.iat,
+            sessionState?.sessionsValidAfter ?? null
+          )
+        ) {
+          res
+            .status(401)
+            .json({ error: "Session has been reset. Please log in again." });
           return;
         }
         req.user = user;

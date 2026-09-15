@@ -188,6 +188,7 @@ model User {
   lastLogin  DateTime? @map("last_login")
   permission String?   @db.VarChar(50)
   mustChangePassword Boolean   @default(false) @map("must_change_password")
+  tokenVersion Int      @default(0) @map("token_version")
   createdAt  DateTime  @default(now()) @map("created_at")
   updatedAt  DateTime  @updatedAt @map("updated_at")
 
@@ -323,6 +324,27 @@ model BarangaySetting {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   @@map("barangay_settings")
+}
+
+// ─── SessionState ────────────────────────────────────────────────────────────
+
+model SessionState {
+  id                 String   @id @default("global")
+  sessionsValidAfter DateTime @default(now()) @map("sessions_valid_after")
+
+  @@map("session_state")
+}
+
+// ─── CryptoKeyring ───────────────────────────────────────────────────────────
+
+model CryptoKeyring {
+  id          String   @id @default("global")
+  serverKey   String   @map("server_key") @db.Text
+  recoveryKey String   @map("recovery_key") @db.Text
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("crypto_keyring")
 }
 
 // ─── Enums ───────────────────────────────────────────────────────────────────

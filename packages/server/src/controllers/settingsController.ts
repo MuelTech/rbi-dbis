@@ -1,6 +1,30 @@
 import type { Request, Response, NextFunction } from "express";
-import { prisma, Prisma } from "@rbi/db";
+import bcrypt from "bcryptjs";
+import jwt from "jsonwebtoken";
+import type { StringValue } from "ms";
+import { prisma } from "@rbi/db";
 import { logAction } from "../services/auditService.js";
+import {
+  buildBackup,
+  applyBackup,
+  validateBackup,
+} from "../services/backupService.js";
+import { buildEncryptedBackup, openEncryptedBackup } from "../services/backupEnvelope.js";
+import {
+  getKeyring,
+  getOrCreateKeyring,
+  serverKekOf,
+  recoveryKekOf,
+  regenerateRecoveryKey,
+} from "../services/backupKeyring.js";
+import {
+  deriveRecoveryKek,
+  parseRecoveryKey,
+  formatRecoveryKey,
+} from "../services/backupCrypto.js";
+
+const JWT_SECRET = process.env.JWT_SECRET ?? "dev-jwt-secret-change-me";
+const JWT_EXPIRES_IN = (process.env.JWT_EXPIRES_IN ?? "8h") as StringValue;
 
 const DEFAULT_SETTINGS = {
   slogan: "Serbisyong Tapat, Para sa Lahat",
@@ -81,46 +105,82 @@ export async function updateSettings(
   }
 }
 
+export async function verifyBackupPassword(
+  req: Request,
+  res: Response,
+  next: NextFunction
+) {
+  try {
+    const userId = req.user?.id;
+    const { password } = req.body ?? {};
+
+    if (!password) {
+      res.status(400).json({ error: "Password is required" });
+      return;
+    }
+
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user) {
+      res.status(404).json({ error: "User not found" });
+      return;
+    }
+
+    const valid = await bcrypt.compare(password, user.password);
+    if (!valid) {
+      res.status(401).json({ error: "Incorrect password" });
+      return;
+    }
+
+    const unlockToken = jwt.sign(
+      { sub: user.id, scope: "backup-restore" },
+      JWT_SECRET,
+      { expiresIn: JWT_EXPIRES_IN }
+    );
+
+    res.json({ unlockToken });
+  } catch (err) {
+    next(err);
+  }
+}
+
+function sendSSE(res: Response, event: string, data: unknown) {
+  res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+  // flush to ensure event is sent immediately
+  if (typeof (res as any).flush === "function") {
+    (res as any).flush();
+  }
+}
+
+function startSSE(res: Response) {
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache");
+  res.setHeader("Connection", "keep-alive");
+  res.flushHeaders();
+}
+
 export async function backupData(
   _req: Request,
   res: Response,
   next: NextFunction
 ) {
   try {
-    const [setting, residents, families, households, blocks, users, documents, documentTypes] =
-      await Promise.all([
-        prisma.barangaySetting.findFirst(),
-        prisma.resident.findMany(),
-        prisma.family.findMany({
-          include: { pet: true, vehicle: true, address: true, members: true },
-        }),
-        prisma.household.findMany(),
-        prisma.block.findMany(),
-        prisma.user.findMany({
-          include: { userInfo: true },
-        }),
-        prisma.document.findMany({
-          include: { documentType: true, signers: true },
-        }),
-        prisma.documentType.findMany(),
-      ]);
+    startSSE(res);
 
-    const backup = {
-      version: 1,
-      exportedAt: new Date().toISOString(),
-      data: {
-        settings: setting?.data ?? null,
-        residents,
-        families,
-        households,
-        blocks,
-        users,
-        documents,
-        documentTypes,
-      },
-    };
+    const plain = await buildBackup((progress) =>
+      sendSSE(res, "progress", progress)
+    );
 
-    res.json(backup);
+    const { keyring, createdRecoveryKey } = await getOrCreateKeyring();
+    const envelope = buildEncryptedBackup({ data: plain.data }, plain.meta, {
+      serverKek: serverKekOf(keyring),
+      recoveryKek: recoveryKekOf(keyring),
+    });
+
+    if (createdRecoveryKey) {
+      sendSSE(res, "recovery-key", { recoveryKey: createdRecoveryKey });
+    }
+    sendSSE(res, "complete", envelope);
+    res.end();
   } catch (err) {
     next(err);
   }
@@ -132,204 +192,64 @@ export async function restoreData(
   next: NextFunction
 ) {
   try {
-    const { data } = req.body;
-    if (!data) {
-      return res.status(400).json({ error: "No backup data provided" });
+    const payload = req.body ?? {};
+
+    startSSE(res);
+
+    const validationError = validateBackup(payload);
+    if (validationError) {
+      sendSSE(res, "error", { error: validationError });
+      res.end();
+      return;
     }
 
-    await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-      // Clear existing data in reverse dependency order
-      await tx.documentSigner.deleteMany();
-      await tx.order.deleteMany();
-      await tx.document.deleteMany();
-      await tx.documentType.deleteMany();
-      await tx.familyMember.deleteMany();
-      await tx.familyPet.deleteMany();
-      await tx.familyVehicle.deleteMany();
-      await tx.family.deleteMany();
-      await tx.address.deleteMany();
-      await tx.household.deleteMany();
-      await tx.block.deleteMany();
-      await tx.resident.deleteMany();
-      await tx.auditTrail.deleteMany();
-      await tx.userInfo.deleteMany();
-      await tx.user.deleteMany();
-      await tx.barangaySetting.deleteMany();
-      await tx.record.deleteMany();
+    let payloadData = payload.data;
 
-      // Restore blocks (strip auto-generated fields)
-      if (data.blocks?.length) {
-        for (const block of data.blocks) {
-          await tx.block.create({
-            data: { id: block.id, blockNumber: block.blockNumber },
+    if (payload.encrypted === true) {
+      const keyring = await getKeyring();
+      const serverKek = keyring ? serverKekOf(keyring) : null;
+
+      let recoveryKek: Buffer | null = null;
+      if (typeof req.body?.recoveryKey === "string" && req.body.recoveryKey.trim()) {
+        try {
+          recoveryKek = deriveRecoveryKek(parseRecoveryKey(req.body.recoveryKey));
+        } catch {
+          sendSSE(res, "error", {
+            error: "Invalid recovery key",
+            code: "INVALID_RECOVERY_KEY",
           });
+          res.end();
+          return;
         }
       }
 
-      // Restore households
-      if (data.households?.length) {
-        for (const h of data.households) {
-          await tx.household.create({
-            data: { id: h.id, brgyHouseholdNo: h.brgyHouseholdNo, blockId: h.blockId },
+      try {
+        const opened = openEncryptedBackup(payload, { serverKek, recoveryKek });
+        payloadData = (opened as any).data;
+      } catch (e: any) {
+        if (e?.message === "RECOVERY_KEY_REQUIRED") {
+          sendSSE(res, "error", {
+            error: "Recovery key required to decrypt this backup",
+            code: "RECOVERY_KEY_REQUIRED",
           });
+          res.end();
+          return;
         }
+        throw e;
       }
+    }
 
-      // Restore residents (strip relations and auto-fields)
-      if (data.residents?.length) {
-        for (const r of data.residents) {
-          await tx.resident.create({
-            data: {
-              id: r.id,
-              lastName: r.lastName,
-              firstName: r.firstName,
-              middleName: r.middleName,
-              suffix: r.suffix,
-              placeOfBirth: r.placeOfBirth,
-              dateOfBirth: r.dateOfBirth ? new Date(r.dateOfBirth) : null,
-              sex: r.sex,
-              civilStatus: r.civilStatus,
-              isVoter: r.isVoter,
-              isPwd: r.isPwd,
-              isSoloParent: r.isSoloParent,
-              isOwner: r.isOwner,
-              studentType: r.studentType,
-              statusType: r.statusType,
-              contactNumber: r.contactNumber,
-              occupationType: r.occupationType,
-              profileImage: r.profileImage,
-              recordId: r.recordId,
-            },
-          });
-        }
-      }
+    await applyBackup(payloadData, (progress) =>
+      sendSSE(res, "progress", progress)
+    );
 
-      // Restore addresses
-      const addressMap = new Map<string, string>();
-      if (data.families?.length) {
-        for (const family of data.families) {
-          if (family.address) {
-            const addr = family.address;
-            const newAddr = await tx.address.create({
-              data: { houseNo: addr.houseNo, streetName: addr.streetName, alleyName: addr.alleyName },
-            });
-            addressMap.set(addr.id, newAddr.id);
-          }
-        }
-      }
-
-      // Restore families
-      if (data.families?.length) {
-        for (const family of data.families) {
-          const newAddressId = addressMap.get(family.addressId) ?? family.addressId;
-          await tx.family.create({
-            data: {
-              id: family.id,
-              familyName: family.familyName,
-              isArchived: family.isArchived,
-              householdId: family.householdId,
-              headPersonId: family.headPersonId,
-              addressId: newAddressId,
-              ...(family.pet && {
-                pet: {
-                  create: {
-                    isPetOwner: family.pet.isPetOwner,
-                    numberOfDogs: family.pet.numberOfDogs,
-                    numberOfCats: family.pet.numberOfCats,
-                    others: family.pet.others,
-                  },
-                },
-              }),
-              ...(family.vehicle && {
-                vehicle: {
-                  create: {
-                    numberOfMotorcycles: family.vehicle.numberOfMotorcycles,
-                    motorcyclePlateNumber: family.vehicle.motorcyclePlateNumber,
-                    numberOfVehicles: family.vehicle.numberOfVehicles,
-                    vehiclePlateNumber: family.vehicle.vehiclePlateNumber,
-                  },
-                },
-              }),
-              ...(family.members?.length && {
-                members: {
-                  create: family.members.map((m: any) => ({
-                    relationshipType: m.relationshipType,
-                    residentId: m.residentId,
-                  })),
-                },
-              }),
-            },
-          });
-        }
-      }
-
-      // Restore users
-      if (data.users?.length) {
-        for (const user of data.users) {
-          await tx.user.create({
-            data: {
-              id: user.id,
-              username: user.username,
-              password: user.password,
-              roleType: user.roleType,
-              isActive: user.isActive,
-              permission: user.permission,
-              ...(user.userInfo && {
-                userInfo: {
-                  create: {
-                    firstName: user.userInfo.firstName,
-                    lastName: user.userInfo.lastName,
-                    phoneNumber: user.userInfo.phoneNumber,
-                    profileImage: user.userInfo.profileImage,
-                  },
-                },
-              }),
-            },
-          });
-        }
-      }
-
-      // Restore document types
-      const docTypeMap = new Map<string, string>();
-      if (data.documentTypes?.length) {
-        for (const dt of data.documentTypes) {
-          const newDt = await tx.documentType.create({
-            data: { documentName: dt.documentName, amount: dt.amount },
-          });
-          docTypeMap.set(dt.id, newDt.id);
-        }
-      }
-
-      // Restore documents
-      if (data.documents?.length) {
-        for (const doc of data.documents) {
-          const newDocTypeId = docTypeMap.get(doc.documentTypeId) ?? doc.documentTypeId;
-          await tx.document.create({
-            data: {
-              id: doc.id,
-              issueDate: new Date(doc.issueDate),
-              purpose: doc.purpose,
-              validityPeriod: doc.validityPeriod,
-              documentTypeId: newDocTypeId,
-              ...(doc.signers?.length && {
-                signers: {
-                  create: doc.signers.map((s: any) => ({
-                    signerFirstName: s.signerFirstName,
-                    signerLastName: s.signerLastName,
-                    signerRole: s.signerRole,
-                    barangayOfficialId: s.barangayOfficialId,
-                  })),
-                },
-              }),
-            },
-          });
-        }
-      }
-
-      // Restore settings
-      if (data.settings) {
-        await tx.barangaySetting.create({ data: { data: data.settings } });
-      }
+    // Invalidate every existing session: any client that was active before
+    // this restore must re-authenticate against the restored data.
+    const now = new Date();
+    await prisma.sessionState.upsert({
+      where: { id: "global" },
+      update: { sessionsValidAfter: now },
+      create: { id: "global", sessionsValidAfter: now },
     });
 
     const userId = req.user?.id;
@@ -337,9 +257,40 @@ export async function restoreData(
       await logAction("settings", "1", userId, "RESTORE", null, "Restored data from backup");
     }
 
-    res.json({ success: true, message: "Data restored successfully" });
+    sendSSE(res, "complete", { success: true, message: "Data restored successfully" });
+    res.end();
   } catch (err: any) {
     console.error("Restore error:", err);
-    res.status(500).json({ error: err?.message ?? "Restore failed" });
+    sendSSE(res, "error", { error: err?.message ?? "Restore failed" });
+    res.end();
+  }
+}
+
+export async function getRecoveryKey(
+  _req: Request,
+  res: Response,
+  next: NextFunction
+) {
+  try {
+    const { keyring, createdRecoveryKey } = await getOrCreateKeyring();
+    const display =
+      createdRecoveryKey ??
+      formatRecoveryKey(Buffer.from(keyring.recoveryKey, "base64"));
+    res.json({ recoveryKey: display });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function regenerateRecoveryKeyHandler(
+  _req: Request,
+  res: Response,
+  next: NextFunction
+) {
+  try {
+    const recoveryKey = await regenerateRecoveryKey();
+    res.json({ recoveryKey });
+  } catch (err) {
+    next(err);
   }
 }

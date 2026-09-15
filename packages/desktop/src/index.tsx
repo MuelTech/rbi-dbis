@@ -10,7 +10,11 @@ const queryClient = new QueryClient({
     queries: {
       staleTime: 30_000,
       retry: 1,
-      refetchOnWindowFocus: false,
+      // Keep multiple connected clients roughly in sync: revalidate when a
+      // window regains focus and poll while it is visible.
+      refetchOnWindowFocus: true,
+      refetchInterval: 60_000,
+      refetchIntervalInBackground: false,
     },
   },
 });

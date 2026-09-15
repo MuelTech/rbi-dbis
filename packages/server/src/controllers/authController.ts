@@ -45,7 +45,7 @@ export async function login(req: Request, res: Response, next: NextFunction) {
     await logAction("users", user.id, user.id, "LOGIN", null, `User ${username} logged in`);
 
     const token = jwt.sign(
-      { sub: user.id, username: user.username },
+      { sub: user.id, username: user.username, tv: user.tokenVersion },
       JWT_SECRET,
       { expiresIn: JWT_EXPIRES_IN }
     );
@@ -124,17 +124,27 @@ export async function changePassword(
     }
 
     const hashedPassword = await bcrypt.hash(newPassword, 10);
-    await prisma.user.update({
+    const updated = await prisma.user.update({
       where: { id: authUser.id },
       data: {
         password: hashedPassword,
         mustChangePassword: false,
+        // Revoke every OTHER existing session for this user.
+        tokenVersion: { increment: 1 },
       },
     });
 
     await logAction("users", authUser.id, authUser.id, "UPDATE", null, "Changed password");
 
-    res.json({ success: true });
+    // Issue a fresh token so the device that changed the password stays signed
+    // in; all previously issued tokens are now invalid.
+    const token = jwt.sign(
+      { sub: updated.id, username: updated.username, tv: updated.tokenVersion },
+      JWT_SECRET,
+      { expiresIn: JWT_EXPIRES_IN }
+    );
+
+    res.json({ success: true, token });
   } catch (err) {
     next(err);
   }

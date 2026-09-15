@@ -9,7 +9,9 @@
     "package": "electron-forge package",
     "vite:dev": "vite",
     "vite:build": "vite build",
-    "vite:preview": "vite preview"
+    "vite:preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.80.0",
@@ -33,6 +35,7 @@
     "@vitejs/plugin-react": "^5.0.0",
     "electron": "^35.0.0",
     "typescript": "~5.8.2",
-    "vite": "^6.2.0"
+    "vite": "^6.2.0",
+    "vitest": "^5.0.0"
   }
 }

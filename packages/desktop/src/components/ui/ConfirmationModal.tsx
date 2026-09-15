@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { X, Info, AlertTriangle } from 'lucide-react';
 
 interface ConfirmationModalProps {
@@ -11,6 +11,7 @@ interface ConfirmationModalProps {
     cancelText?: string;
     isLoading?: boolean;
     variant?: 'danger' | 'warning' | 'info';
+    confirmPhrase?: string;
 }
 
 const ConfirmationModal: React.FC<ConfirmationModalProps> = ({ 
@@ -22,8 +23,15 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
     confirmText = "Confirm",
     cancelText = "Cancel",
     isLoading = false,
-    variant = "danger"
+    variant = "danger",
+    confirmPhrase
 }) => {
+    const [phraseInput, setPhraseInput] = useState('');
+
+    useEffect(() => {
+        if (!isOpen) setPhraseInput('');
+    }, [isOpen]);
+
     if (!isOpen) return null;
 
     const variantStyles = {
@@ -51,6 +59,7 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
     };
 
     const styles = variantStyles[variant];
+    const phraseOk = !confirmPhrase || phraseInput === confirmPhrase;
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/20 backdrop-blur-sm">
@@ -79,6 +88,21 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
                     </p>
                 </div>
 
+                {confirmPhrase && (
+                    <div className="px-6 pb-2">
+                        <label className="block text-xs font-semibold text-gray-500 mb-2">
+                            Type <span className="font-bold text-gray-900">{confirmPhrase}</span> to confirm
+                        </label>
+                        <input
+                            value={phraseInput}
+                            onChange={(e) => setPhraseInput(e.target.value)}
+                            className="w-full p-3 bg-white border border-gray-200 rounded-xl text-sm text-gray-700 focus:ring-2 focus:ring-red-500/20 focus:border-red-500 outline-none transition-all"
+                            placeholder={confirmPhrase}
+                            autoFocus
+                        />
+                    </div>
+                )}
+
                 {/* Footer */}
                 <div className="p-6 flex items-center justify-end gap-3">
                     <button 
@@ -90,7 +114,7 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
                     </button>
                     <button 
                         onClick={onConfirm}
-                        disabled={isLoading}
+                        disabled={isLoading || !phraseOk}
                         className={`px-4 py-2.5 rounded-lg ${styles.confirmBg} text-white font-bold text-[14px] transition-colors shadow-lg ${styles.confirmShadow} disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2`}
                     >
                         {isLoading && (
