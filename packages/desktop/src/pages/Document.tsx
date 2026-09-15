@@ -238,9 +238,8 @@ const Document: React.FC<DocumentProps> = ({ setIsNavigationBlocked }) => {
 
       setShowConfirmModal(false);
 
-      // Give the saved/printed document a meaningful file name. Chromium derives
-      // the "Save as PDF" file name from the document title.
-      const originalTitle = document.title;
+      // Build a meaningful default file name and generate the PDF via Electron's
+      // printToPDF + save dialog (window.print() can't set the saved name).
       const sanitize = (s: string) =>
         s
           .replace(/[\\/:*?"<>|]+/g, "_")
@@ -250,18 +249,25 @@ const Document: React.FC<DocumentProps> = ({ setIsNavigationBlocked }) => {
       const residentName = formData.selectedResident || "Resident";
       const docName = activeConfig?.name || documentType;
       const dateStr = new Date().toISOString().slice(0, 10);
-      document.title = `${sanitize(residentName)}_${sanitize(docName)}_${dateStr}`;
+      const defaultFilename = `${sanitize(residentName)}_${sanitize(docName)}_${dateStr}.pdf`;
 
-      // Wait for state to update before printing
-      setTimeout(() => {
-        window.print();
-        setTimeout(() => {
-          document.title = originalTitle;
+      // Wait for the preview (OR number) to render before capturing the PDF.
+      setTimeout(async () => {
+        try {
+          if (window.electronAPI) {
+            await window.electronAPI.invoke("save-pdf", defaultFilename);
+          } else {
+            window.print();
+          }
+        } catch {
+          // Fall back to the system print dialog if the IPC path fails.
+          window.print();
+        } finally {
           resetForm();
           setStep(1);
           setIsIssuing(false);
-        }, 500);
-      }, 100);
+        }
+      }, 150);
     } catch (err) {
       alert('Failed to create document. Please try again.');
       setShowConfirmModal(false);
