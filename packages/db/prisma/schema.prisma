@@ -262,6 +262,7 @@ model DocumentType {
   id           String    @id @default(cuid())
   documentName String    @map("document_name") @db.VarChar(100)
   amount       Decimal   @default(0) @db.Decimal(10, 2)
+  isSystem     Boolean   @default(false) @map("is_system")
 
   documents    Document[]
 
