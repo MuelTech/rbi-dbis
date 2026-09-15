@@ -64,10 +64,10 @@ const Document: React.FC<DocumentProps> = ({ setIsNavigationBlocked }) => {
     };
   }, [step, setIsNavigationBlocked]);
 
-  // Fetch real residents from API
+  // Fetch active residents from API (documents are only issued to living, present residents)
   const { data: residentsData } = useQuery({
-    queryKey: ['residents', { pageSize: 1000 }],
-    queryFn: () => residentsService.list({ pageSize: 1000 }),
+    queryKey: ['residents', { pageSize: 1000, status: ['Active'] }],
+    queryFn: () => residentsService.list({ pageSize: 1000, status: ['Active'] }),
   });
   const residents = residentsData?.data ?? [];
 
@@ -94,6 +94,7 @@ const Document: React.FC<DocumentProps> = ({ setIsNavigationBlocked }) => {
 
   const filteredResidents = useMemo(() => 
     residents.filter(r => 
+      r.status === 'Active' &&
       getFullName(r).toLowerCase().includes(searchQuery.toLowerCase()) && searchQuery.length > 0
     ), [residents, searchQuery]
   );
