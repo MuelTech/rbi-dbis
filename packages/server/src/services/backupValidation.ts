@@ -1,4 +1,4 @@
-export const BACKUP_VERSION = 2;
+export const BACKUP_VERSION = 3;
 
 export interface BackupMeta {
   counts: Record<string, number>;
@@ -21,6 +21,13 @@ export function validateBackup(payload: any): string | null {
   }
   if (payload.version > BACKUP_VERSION) {
     return `Backup version ${payload.version} is newer than this system supports (${BACKUP_VERSION})`;
+  }
+  if (payload.encrypted === true) {
+    const wraps = payload.data?.wraps;
+    if (!payload.data || !Array.isArray(wraps)) {
+      return "Invalid encrypted backup";
+    }
+    return null;
   }
   if (!payload.data || typeof payload.data !== "object") {
     return "Backup file is missing data";

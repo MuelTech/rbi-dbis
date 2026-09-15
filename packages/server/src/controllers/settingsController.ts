@@ -9,6 +9,19 @@ import {
   applyBackup,
   validateBackup,
 } from "../services/backupService.js";
+import { buildEncryptedBackup, openEncryptedBackup } from "../services/backupEnvelope.js";
+import {
+  getKeyring,
+  getOrCreateKeyring,
+  serverKekOf,
+  recoveryKekOf,
+  regenerateRecoveryKey,
+} from "../services/backupKeyring.js";
+import {
+  deriveRecoveryKek,
+  parseRecoveryKey,
+  formatRecoveryKey,
+} from "../services/backupCrypto.js";
 
 const JWT_SECRET = process.env.JWT_SECRET ?? "dev-jwt-secret-change-me";
 const JWT_EXPIRES_IN = (process.env.JWT_EXPIRES_IN ?? "8h") as StringValue;
@@ -153,11 +166,20 @@ export async function backupData(
   try {
     startSSE(res);
 
-    const backup = await buildBackup((progress) =>
+    const plain = await buildBackup((progress) =>
       sendSSE(res, "progress", progress)
     );
 
-    sendSSE(res, "complete", backup);
+    const { keyring, createdRecoveryKey } = await getOrCreateKeyring();
+    const envelope = buildEncryptedBackup({ data: plain.data }, plain.meta, {
+      serverKek: serverKekOf(keyring),
+      recoveryKek: recoveryKekOf(keyring),
+    });
+
+    if (createdRecoveryKey) {
+      sendSSE(res, "recovery-key", { recoveryKey: createdRecoveryKey });
+    }
+    sendSSE(res, "complete", envelope);
     res.end();
   } catch (err) {
     next(err);
@@ -181,7 +203,43 @@ export async function restoreData(
       return;
     }
 
-    await applyBackup(payload.data, (progress) =>
+    let payloadData = payload.data;
+
+    if (payload.encrypted === true) {
+      const keyring = await getKeyring();
+      const serverKek = keyring ? serverKekOf(keyring) : null;
+
+      let recoveryKek: Buffer | null = null;
+      if (typeof req.body?.recoveryKey === "string" && req.body.recoveryKey.trim()) {
+        try {
+          recoveryKek = deriveRecoveryKek(parseRecoveryKey(req.body.recoveryKey));
+        } catch {
+          sendSSE(res, "error", {
+            error: "Invalid recovery key",
+            code: "INVALID_RECOVERY_KEY",
+          });
+          res.end();
+          return;
+        }
+      }
+
+      try {
+        const opened = openEncryptedBackup(payload, { serverKek, recoveryKek });
+        payloadData = (opened as any).data;
+      } catch (e: any) {
+        if (e?.message === "RECOVERY_KEY_REQUIRED") {
+          sendSSE(res, "error", {
+            error: "Recovery key required to decrypt this backup",
+            code: "RECOVERY_KEY_REQUIRED",
+          });
+          res.end();
+          return;
+        }
+        throw e;
+      }
+    }
+
+    await applyBackup(payloadData, (progress) =>
       sendSSE(res, "progress", progress)
     );
 
@@ -205,5 +263,34 @@ export async function restoreData(
     console.error("Restore error:", err);
     sendSSE(res, "error", { error: err?.message ?? "Restore failed" });
     res.end();
+  }
+}
+
+export async function getRecoveryKey(
+  _req: Request,
+  res: Response,
+  next: NextFunction
+) {
+  try {
+    const { keyring, createdRecoveryKey } = await getOrCreateKeyring();
+    const display =
+      createdRecoveryKey ??
+      formatRecoveryKey(Buffer.from(keyring.recoveryKey, "base64"));
+    res.json({ recoveryKey: display });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function regenerateRecoveryKeyHandler(
+  _req: Request,
+  res: Response,
+  next: NextFunction
+) {
+  try {
+    const recoveryKey = await regenerateRecoveryKey();
+    res.json({ recoveryKey });
+  } catch (err) {
+    next(err);
   }
 }

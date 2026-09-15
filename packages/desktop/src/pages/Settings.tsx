@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import ContentCard from '@/components/ui/ContentCard';
 import ConfirmationModal from '@/components/ui/ConfirmationModal';
-import { Image, MapPin, Users, Save, Upload, Settings as SettingsIcon, FileText, List, Plus, X, Database, Download, UploadCloud, History, FileUp, Loader2, Lock, Eye, EyeOff } from 'lucide-react';
+import { Image, MapPin, Users, Save, Upload, Settings as SettingsIcon, FileText, List, Plus, X, Database, Download, UploadCloud, History, FileUp, Loader2, Lock, Eye, EyeOff, KeyRound, Copy, RefreshCw, ShieldCheck } from 'lucide-react';
 import { settingsService, BarangaySettings, ProgressUpdate, getBackupUnlock, setBackupUnlock, clearBackupUnlock } from '@/services/settings';
 import { useAuth } from '@/context/AuthContext';
 
@@ -32,7 +32,7 @@ function downloadJson(data: unknown, filename: string) {
 const Settings: React.FC<SettingsProps> = ({ onShowSuccess, setIsNavigationBlocked }) => {
     const [activeTab, setActiveTab] = useState('General Information');
     const queryClient = useQueryClient();
-    const { logout } = useAuth();
+    const { logout, user } = useAuth();
 
     const { data: settings, isLoading } = useQuery({
         queryKey: ['settings'],
@@ -64,7 +64,14 @@ const Settings: React.FC<SettingsProps> = ({ onShowSuccess, setIsNavigationBlock
     const [pendingRestoreFile, setPendingRestoreFile] = useState<File | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [restoreError, setRestoreError] = useState<string | null>(null);
-    const [progressModal, setProgressModal] = useState<{ type: 'backup' | 'restore'; progress: ProgressUpdate | null; label?: string } | null>(null);
+    const [progressModal, setProgressModal] = useState<{ type: 'backup' | 'restore'; progress: ProgressUpdate | null } | null>(null);
+    const pendingBackupRef = useRef<any>(null);
+    const [needsRecoveryKey, setNeedsRecoveryKey] = useState(false);
+    const [recoveryKeyInput, setRecoveryKeyInput] = useState('');
+    const [recoveryKeyToSave, setRecoveryKeyToSave] = useState<string | null>(null);
+    const [encryptionKey, setEncryptionKey] = useState<string | null>(null);
+    const [isLoadingKey, setIsLoadingKey] = useState(false);
+    const [showRegenConfirm, setShowRegenConfirm] = useState(false);
 
     const [isUnlocked, setIsUnlocked] = useState<boolean>(() => !!getBackupUnlock());
     const [unlockPassword, setUnlockPassword] = useState('');
@@ -113,9 +120,12 @@ const Settings: React.FC<SettingsProps> = ({ onShowSuccess, setIsNavigationBlock
         setIsBackupRunning(true);
         setProgressModal({ type: 'backup', progress: null });
         try {
-            const data = await settingsService.backupWithProgress((update) => {
-                setProgressModal((prev) => prev ? { ...prev, progress: update } : null);
-            });
+            const data = await settingsService.backupWithProgress(
+                (update) => {
+                    setProgressModal((prev) => prev ? { ...prev, progress: update } : null);
+                },
+                (key) => setRecoveryKeyToSave(key)
+            );
             // Small delay so user sees 100% before modal closes
             await new Promise((r) => setTimeout(r, 400));
             setProgressModal(null);
@@ -124,7 +134,7 @@ const Settings: React.FC<SettingsProps> = ({ onShowSuccess, setIsNavigationBlock
             setLastBackup(now.toLocaleString());
             const meta: BackupMetaDisplay = {
                 version: data.version,
-                exportedAt: data.exportedAt,
+                exportedAt: data.exportedAt ?? data.createdAt ?? new Date().toISOString(),
                 total: data.meta?.total ?? 0,
             };
             setLastBackupMeta(meta);
@@ -177,6 +187,87 @@ const Settings: React.FC<SettingsProps> = ({ onShowSuccess, setIsNavigationBlock
         if (fileInputRef.current) fileInputRef.current.value = '';
     };
 
+    const finishRestoreSuccess = async () => {
+        // Small delay so user sees 100% before modal closes
+        await new Promise((r) => setTimeout(r, 400));
+        setProgressModal(null);
+        queryClient.invalidateQueries();
+        clearBackupUnlock();
+        setIsUnlocked(false);
+        if (onShowSuccess) onShowSuccess('Data restored successfully. Please log in again.');
+        if (setIsNavigationBlocked) setIsNavigationBlocked(false);
+        setTimeout(() => logout(), 1200);
+    };
+
+    const runRestore = async (backup: any, recoveryKey?: string) => {
+        setProgressModal({ type: 'restore', progress: null });
+        await settingsService.restoreWithProgress(
+            backup,
+            (update) => {
+                setProgressModal((prev) => prev ? { ...prev, progress: update } : null);
+            },
+            recoveryKey
+        );
+        await finishRestoreSuccess();
+    };
+
+    const handleRecoveryKeySubmit = async () => {
+        const backup = pendingBackupRef.current;
+        if (!backup || !recoveryKeyInput.trim()) return;
+        setNeedsRecoveryKey(false);
+        setIsRestoreRunning(true);
+        setRestoreError(null);
+        try {
+            await runRestore(backup, recoveryKeyInput.trim());
+        } catch (err: any) {
+            setProgressModal(null);
+            const msg = err?.message || 'Restore failed';
+            setRestoreError(msg);
+            if (err?.code === 'RECOVERY_KEY_REQUIRED') {
+                setNeedsRecoveryKey(true);
+                if (onShowSuccess) onShowSuccess('Recovery key was not accepted. Please check it and try again.');
+            } else {
+                if (isLockError(msg)) relock();
+                if (onShowSuccess) onShowSuccess(`Restore failed: ${msg}`);
+            }
+        } finally {
+            setIsRestoreRunning(false);
+        }
+    };
+
+    const handleShowRecoveryKey = async () => {
+        setIsLoadingKey(true);
+        try {
+            const { recoveryKey } = await settingsService.getRecoveryKey();
+            setEncryptionKey(recoveryKey);
+        } catch (err: any) {
+            if (onShowSuccess) onShowSuccess(`Could not load recovery key: ${err?.message || 'error'}`);
+        } finally {
+            setIsLoadingKey(false);
+        }
+    };
+
+    const handleRegenerateRecoveryKey = async () => {
+        setShowRegenConfirm(false);
+        try {
+            const { recoveryKey } = await settingsService.regenerateRecoveryKey();
+            setEncryptionKey(recoveryKey);
+            setRecoveryKeyToSave(recoveryKey);
+            if (onShowSuccess) onShowSuccess('New recovery key generated. Save it now.');
+        } catch (err: any) {
+            if (onShowSuccess) onShowSuccess(`Could not regenerate recovery key: ${err?.message || 'error'}`);
+        }
+    };
+
+    const copyToClipboard = async (text: string) => {
+        try {
+            await navigator.clipboard.writeText(text);
+            if (onShowSuccess) onShowSuccess('Copied to clipboard');
+        } catch {
+            if (onShowSuccess) onShowSuccess('Copy failed');
+        }
+    };
+
     const handleRestoreConfirm = async () => {
         if (!pendingRestoreFile) return;
         setShowRestoreConfirm(false);
@@ -199,42 +290,19 @@ const Settings: React.FC<SettingsProps> = ({ onShowSuccess, setIsNavigationBlock
                 setPendingRestoreFile(null);
                 return;
             }
+            pendingBackupRef.current = backup;
 
-            // Download a safety copy of the current data before overwriting anything.
-            setProgressModal({ type: 'backup', progress: null, label: 'Saving safety backup...' });
-            try {
-                const safety = await settingsService.backupWithProgress((update) => {
-                    setProgressModal((prev) => prev ? { ...prev, progress: update } : null);
-                });
-                downloadJson(safety, `rbi-pre-restore-${new Date().toISOString().slice(0, 10)}.json`);
-            } catch (err: any) {
-                setProgressModal(null);
-                if (isLockError(err?.message || '')) relock();
-                if (onShowSuccess) onShowSuccess(`Restore cancelled: could not save safety backup (${err?.message || 'unknown error'})`);
-                setIsRestoreRunning(false);
-                setPendingRestoreFile(null);
-                return;
-            }
-
-            setProgressModal({ type: 'restore', progress: null });
-            await settingsService.restoreWithProgress(backup, (update) => {
-                setProgressModal((prev) => prev ? { ...prev, progress: update } : null);
-            });
-            // Small delay so user sees 100% before modal closes
-            await new Promise((r) => setTimeout(r, 400));
-            setProgressModal(null);
-            queryClient.invalidateQueries();
-            clearBackupUnlock();
-            setIsUnlocked(false);
-            if (onShowSuccess) onShowSuccess('Data restored successfully. Please log in again.');
-            if (setIsNavigationBlocked) setIsNavigationBlocked(false);
-            setTimeout(() => logout(), 1200);
+            await runRestore(backup);
         } catch (err: any) {
             setProgressModal(null);
             const msg = err?.message || 'Restore failed';
             setRestoreError(msg);
-            if (isLockError(msg)) relock();
-            if (onShowSuccess) onShowSuccess(`Restore failed: ${msg}`);
+            if (err?.code === 'RECOVERY_KEY_REQUIRED') {
+                setNeedsRecoveryKey(true);
+            } else {
+                if (isLockError(msg)) relock();
+                if (onShowSuccess) onShowSuccess(`Restore failed: ${msg}`);
+            }
         } finally {
             setIsRestoreRunning(false);
             setPendingRestoreFile(null);
@@ -690,6 +758,58 @@ const Settings: React.FC<SettingsProps> = ({ onShowSuccess, setIsNavigationBlock
                                 </div>
                             </div>
 
+                            {user?.roleType === 'SuperAdmin' && (
+                                <div className="md:col-span-2 bg-white rounded-2xl border border-gray-100 p-8 shadow-sm">
+                                    <div className="flex items-center gap-2 mb-6">
+                                        <ShieldCheck className="w-5 h-5 text-indigo-500" />
+                                        <h2 className="text-sm font-bold text-gray-900">Backup Encryption</h2>
+                                    </div>
+                                    <p className="text-sm text-gray-500 mb-6 max-w-2xl">
+                                        Backups are encrypted with AES-256-GCM. Restoring on this server is automatic. Keep the recovery key somewhere safe and off this computer so you can restore on a new installation.
+                                    </p>
+                                    {encryptionKey && (
+                                        <div className="w-full bg-gray-50 rounded-xl p-4 mb-6">
+                                            <p className="text-xs font-semibold text-gray-500 mb-1">Recovery Key</p>
+                                            <code className="text-sm text-gray-800 tracking-wider break-all">{encryptionKey}</code>
+                                        </div>
+                                    )}
+                                    <div className="flex flex-wrap gap-3">
+                                        <button
+                                            onClick={handleShowRecoveryKey}
+                                            disabled={isLoadingKey}
+                                            className="bg-white border border-gray-200 text-gray-700 font-bold text-sm px-4 py-2.5 rounded-xl hover:bg-gray-50 transition-colors flex items-center gap-2 disabled:opacity-50"
+                                        >
+                                            {isLoadingKey ? <Loader2 size={16} className="animate-spin" /> : <KeyRound size={16} />}
+                                            Show Recovery Key
+                                        </button>
+                                        {encryptionKey && (
+                                            <button
+                                                onClick={() => copyToClipboard(encryptionKey)}
+                                                className="bg-white border border-gray-200 text-gray-700 font-bold text-sm px-4 py-2.5 rounded-xl hover:bg-gray-50 transition-colors flex items-center gap-2"
+                                            >
+                                                <Copy size={16} /> Copy
+                                            </button>
+                                        )}
+                                        <button
+                                            onClick={() => setShowRegenConfirm(true)}
+                                            className="bg-white border border-red-200 text-red-600 font-bold text-sm px-4 py-2.5 rounded-xl hover:bg-red-50 transition-colors flex items-center gap-2"
+                                        >
+                                            <RefreshCw size={16} /> Regenerate
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+
+                            <ConfirmationModal
+                                isOpen={showRegenConfirm}
+                                onClose={() => setShowRegenConfirm(false)}
+                                onConfirm={handleRegenerateRecoveryKey}
+                                title="Regenerate Recovery Key?"
+                                message="A new recovery key will be created. Backups made before now will still require the OLD key. Make sure you have the current key saved before continuing."
+                                confirmText="Regenerate"
+                                variant="danger"
+                            />
+
                             <ConfirmationModal
                                 isOpen={showRestoreConfirm}
                                 onClose={() => { setShowRestoreConfirm(false); setPendingRestoreFile(null); }}
@@ -699,6 +819,89 @@ const Settings: React.FC<SettingsProps> = ({ onShowSuccess, setIsNavigationBlock
                                 confirmPhrase="RESTORE"
                                 confirmText="Restore"
                             />
+
+                            {recoveryKeyToSave && (
+                                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+                                    <div className="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-md mx-4">
+                                        <div className="flex flex-col items-center text-center">
+                                            <div className="w-14 h-14 bg-amber-50 rounded-xl flex items-center justify-center mb-4">
+                                                <KeyRound size={24} className="text-amber-600" />
+                                            </div>
+                                            <h3 className="text-lg font-bold text-gray-900 mb-2">Save Your Recovery Key</h3>
+                                            <p className="text-sm text-gray-500 mb-5 max-w-xs">
+                                                Store this key somewhere safe and off this computer. It is the only way to decrypt your backups if this server is lost.
+                                            </p>
+                                            <code className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-800 tracking-wider break-all mb-5">
+                                                {recoveryKeyToSave}
+                                            </code>
+                                            <div className="flex items-center justify-center gap-3 w-full mb-4">
+                                                <button
+                                                    onClick={() => copyToClipboard(recoveryKeyToSave)}
+                                                    className="flex-1 border border-gray-200 text-gray-700 font-bold text-sm py-2.5 rounded-xl hover:bg-gray-50 transition-colors flex items-center justify-center gap-2"
+                                                >
+                                                    <Copy size={16} /> Copy
+                                                </button>
+                                                <button
+                                                    onClick={() => downloadJson({ recoveryKey: recoveryKeyToSave }, 'rbi-recovery-key.json')}
+                                                    className="flex-1 border border-gray-200 text-gray-700 font-bold text-sm py-2.5 rounded-xl hover:bg-gray-50 transition-colors flex items-center justify-center gap-2"
+                                                >
+                                                    <Download size={16} /> Download
+                                                </button>
+                                            </div>
+                                            <button
+                                                onClick={() => setRecoveryKeyToSave(null)}
+                                                className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-xl font-bold transition-all shadow-lg shadow-blue-200 active:scale-95"
+                                            >
+                                                I've saved it
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {needsRecoveryKey && (
+                                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+                                    <div className="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-md mx-4">
+                                        <div className="flex flex-col items-center text-center">
+                                            <div className="w-14 h-14 bg-blue-50 rounded-xl flex items-center justify-center mb-4">
+                                                <Lock size={24} className="text-blue-600" />
+                                            </div>
+                                            <h3 className="text-lg font-bold text-gray-900 mb-2">Recovery Key Required</h3>
+                                            <p className="text-sm text-gray-500 mb-6 max-w-xs">
+                                                This backup was encrypted on a different installation. Enter the recovery key to decrypt it.
+                                            </p>
+                                            <input
+                                                value={recoveryKeyInput}
+                                                onChange={(e) => setRecoveryKeyInput(e.target.value)}
+                                                placeholder="XXXX-XXXX-XXXX-XXXX-XXXX-XXXX-XXXX-XXXX"
+                                                autoFocus
+                                                className="w-full p-3 bg-white border border-gray-200 rounded-xl text-sm text-center tracking-wider text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all mb-5"
+                                            />
+                                            {restoreError && (
+                                                <div className="w-full mb-4 p-3 bg-red-50 text-red-500 text-sm rounded-xl text-center">
+                                                    {restoreError}
+                                                </div>
+                                            )}
+                                            <div className="flex items-center justify-end gap-3 w-full">
+                                                <button
+                                                    onClick={() => { setNeedsRecoveryKey(false); setRecoveryKeyInput(''); }}
+                                                    className="px-4 py-2.5 rounded-lg border border-gray-200 text-gray-700 font-bold text-sm hover:bg-gray-50 transition-colors"
+                                                >
+                                                    Cancel
+                                                </button>
+                                                <button
+                                                    onClick={handleRecoveryKeySubmit}
+                                                    disabled={!recoveryKeyInput.trim() || isRestoreRunning}
+                                                    className="px-4 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm transition-colors shadow-lg shadow-blue-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                                                >
+                                                    {isRestoreRunning && <Loader2 size={16} className="animate-spin" />}
+                                                    Decrypt &amp; Restore
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
 
                             {/* Progress Modal */}
                             {progressModal && (
@@ -716,7 +919,7 @@ const Settings: React.FC<SettingsProps> = ({ onShowSuccess, setIsNavigationBlock
                                             </div>
 
                                             <h3 className="text-lg font-bold text-gray-900 mb-1">
-                                                {progressModal.label ?? (progressModal.type === 'backup' ? 'Backing Up Data' : 'Restoring Data')}
+                                                {progressModal.type === 'backup' ? 'Backing Up Data' : 'Restoring Data'}
                                             </h3>
 
                                             {progressModal.progress ? (

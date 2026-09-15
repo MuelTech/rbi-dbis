@@ -335,6 +335,18 @@ model SessionState {
   @@map("session_state")
 }
 
+// ─── CryptoKeyring ───────────────────────────────────────────────────────────
+
+model CryptoKeyring {
+  id          String   @id @default("global")
+  serverKey   String   @map("server_key") @db.Text
+  recoveryKey String   @map("recovery_key") @db.Text
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("crypto_keyring")
+}
+
 // ─── Enums ───────────────────────────────────────────────────────────────────
 
 enum Sex {

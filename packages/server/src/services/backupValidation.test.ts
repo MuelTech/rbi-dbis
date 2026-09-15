@@ -40,6 +40,24 @@ describe("validateBackup", () => {
   });
 });
 
+describe("validateBackup v3 (encrypted)", () => {
+  it("accepts an encrypted v3 envelope", () => {
+    expect(
+      validateBackup({ version: 3, encrypted: true, data: { ciphertext: "x", wraps: [] } })
+    ).toBeNull();
+  });
+
+  it("rejects an encrypted envelope without wraps", () => {
+    expect(
+      validateBackup({ version: 3, encrypted: true, data: { ciphertext: "x" } })
+    ).toBe("Invalid encrypted backup");
+  });
+
+  it("rejects a version newer than 3", () => {
+    expect(validateBackup({ version: 4, data: {} })).toContain("newer than");
+  });
+});
+
 describe("summarizeBackup", () => {
   it("counts arrays by length and singletons as one", () => {
     const meta = summarizeBackup({

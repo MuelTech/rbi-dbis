@@ -61,8 +61,11 @@ export interface BackupMeta {
 }
 
 export interface BackupData {
+  format?: string;
   version: number;
-  exportedAt: string;
+  encrypted?: boolean;
+  createdAt?: string;
+  exportedAt?: string;
   data: Record<string, any>;
   meta?: BackupMeta;
 }
@@ -78,7 +81,8 @@ function sseRequest<T>(
   method: string,
   url: string,
   body: string | null,
-  onProgress: (update: ProgressUpdate) => void
+  onProgress: (update: ProgressUpdate) => void,
+  onRecoveryKey?: (key: string) => void
 ): Promise<T> {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
@@ -98,6 +102,7 @@ function sseRequest<T>(
     let lastLen = 0;
     const parser = createSseParser({
       onProgress: (parsed) => onProgress(parsed as ProgressUpdate),
+      onRecoveryKey,
     });
 
     xhr.onprogress = () => {
@@ -118,7 +123,9 @@ function sseRequest<T>(
       const result = parser.getResult();
       if (xhr.status >= 200 && xhr.status < 300) {
         if (result?.error) {
-          reject(new Error(result.error));
+          const err: any = new Error(result.error);
+          if (result.code) err.code = result.code;
+          reject(err);
         } else {
           resolve(result as T);
         }
@@ -141,6 +148,15 @@ export const settingsService = {
   verifyPassword: (password: string) =>
     api.post<{ unlockToken: string }>("/settings/verify-password", { password }),
 
+  getRecoveryKey: () =>
+    api.get<{ recoveryKey: string }>("/settings/encryption/recovery-key"),
+
+  regenerateRecoveryKey: () =>
+    api.post<{ recoveryKey: string }>(
+      "/settings/encryption/recovery-key/regenerate",
+      {}
+    ),
+
   backup: async (): Promise<BackupData> => {
     const res = await fetch(`${API_BASE}/settings/backup`, {
       headers: { ...authHeaders(), ...unlockHeaders() },
@@ -150,13 +166,15 @@ export const settingsService = {
   },
 
   backupWithProgress: async (
-    onProgress: (update: ProgressUpdate) => void
+    onProgress: (update: ProgressUpdate) => void,
+    onRecoveryKey?: (key: string) => void
   ): Promise<BackupData> => {
     return sseRequest<BackupData>(
       "GET",
       `${API_BASE}/settings/backup`,
       null,
-      onProgress
+      onProgress,
+      onRecoveryKey
     );
   },
 
@@ -165,12 +183,13 @@ export const settingsService = {
 
   restoreWithProgress: async (
     data: BackupData,
-    onProgress: (update: ProgressUpdate) => void
+    onProgress: (update: ProgressUpdate) => void,
+    recoveryKey?: string
   ): Promise<{ success: boolean }> => {
     return sseRequest<{ success: boolean }>(
       "POST",
       `${API_BASE}/settings/restore`,
-      JSON.stringify(data),
+      JSON.stringify({ ...data, recoveryKey }),
       onProgress
     );
   },

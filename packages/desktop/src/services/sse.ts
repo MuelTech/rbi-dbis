@@ -1,5 +1,6 @@
 export interface SseMessageHandlers {
   onProgress?: (data: any) => void;
+  onRecoveryKey?: (key: string) => void;
 }
 
 export interface SseParser {
@@ -43,6 +44,10 @@ export function createSseParser(handlers: SseMessageHandlers = {}): SseParser {
 
     if (event === "progress") {
       handlers.onProgress?.(parsed);
+    } else if (event === "recovery-key") {
+      if (typeof parsed?.recoveryKey === "string") {
+        handlers.onRecoveryKey?.(parsed.recoveryKey);
+      }
     } else if (event === "complete" || event === "error") {
       result = parsed;
     }

@@ -65,4 +65,14 @@ describe("createSseParser", () => {
     ]);
     expect(result).toEqual({ a: 1, b: 2 });
   });
+
+  it("captures a recovery-key event via its callback", () => {
+    const seen: string[] = [];
+    const parser = createSseParser({ onRecoveryKey: (k) => seen.push(k) });
+    parser.push('event: recovery-key\ndata: {"recoveryKey":"ABCD-EFGH"}\n\n');
+    parser.push('event: complete\ndata: {"version":3}\n\n');
+    parser.flush();
+    expect(seen).toEqual(["ABCD-EFGH"]);
+    expect(parser.getResult()).toEqual({ version: 3 });
+  });
 });

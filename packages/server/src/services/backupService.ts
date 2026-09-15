@@ -50,6 +50,7 @@ export const HANDLED_MODELS: Record<Prisma.ModelName, true> = {
   BarangaySetting: true,
   // Infrastructure state, intentionally NOT exported/restored by backup.
   SessionState: true,
+  CryptoKeyring: true,
 };
 
 const EXPORT_STEPS: { key: string; label: string; run: () => Promise<any> }[] = [
