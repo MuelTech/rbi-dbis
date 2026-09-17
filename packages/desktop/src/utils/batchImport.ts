@@ -1,6 +1,5 @@
 export interface BatchImportResult {
   created: number;
-  updated: number;
   skipped: number;
   families: number;
   errors: string[];
@@ -26,11 +25,10 @@ export function mergeChunkResults(results: BatchImportResult[]): BatchImportResu
   return results.reduce<BatchImportResult>(
     (acc, result) => ({
       created: acc.created + result.created,
-      updated: acc.updated + result.updated,
       skipped: acc.skipped + result.skipped,
       families: acc.families + result.families,
       errors: [...acc.errors, ...result.errors],
     }),
-    { created: 0, updated: 0, skipped: 0, families: 0, errors: [] }
+    { created: 0, skipped: 0, families: 0, errors: [] }
   );
 }
