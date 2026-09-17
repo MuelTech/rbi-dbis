@@ -18,9 +18,17 @@ export interface HouseholdListParams {
   search?: string;
 }
 
+export interface HouseholdSummary {
+  cats: number;
+  dogs: number;
+  motorcycles: number;
+  vehicles: number;
+}
+
 export interface PaginatedHouseholds {
   data: HouseholdRow[];
   meta: { page: number; pageSize: number; total: number; totalPages: number };
+  summary: HouseholdSummary;
 }
 
 export const householdsService = {

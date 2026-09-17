@@ -29,7 +29,7 @@ export async function getHouseholds(
 
     const skip = (page - 1) * pageSize;
 
-    const [total, households] = await Promise.all([
+    const [total, households, petTotals, vehicleTotals] = await Promise.all([
       prisma.household.count({ where }),
       prisma.household.findMany({
         where,
@@ -53,6 +53,14 @@ export async function getHouseholds(
             },
           },
         },
+      }),
+      prisma.familyPet.aggregate({
+        _sum: { numberOfCats: true, numberOfDogs: true },
+        where: { family: { isArchived: false } },
+      }),
+      prisma.familyVehicle.aggregate({
+        _sum: { numberOfMotorcycles: true, numberOfVehicles: true },
+        where: { family: { isArchived: false } },
       }),
     ]);
 
@@ -86,7 +94,16 @@ export async function getHouseholds(
 
     const totalPages = Math.ceil(total / pageSize);
 
-    res.json({ data, meta: { page, pageSize, total, totalPages } });
+    res.json({
+      data,
+      meta: { page, pageSize, total, totalPages },
+      summary: {
+        cats: petTotals._sum.numberOfCats ?? 0,
+        dogs: petTotals._sum.numberOfDogs ?? 0,
+        motorcycles: vehicleTotals._sum.numberOfMotorcycles ?? 0,
+        vehicles: vehicleTotals._sum.numberOfVehicles ?? 0,
+      },
+    });
   } catch (err) {
     next(err);
   }
