@@ -9,6 +9,7 @@ import { DocumentConfig } from '@/types';
 import { useSettings } from '@/hooks/useSettings';
 import { residentsService } from '@/services/residents';
 import { documentsService } from '@/services/documents';
+import { getFullName } from '@/utils/formatName';
 import type { FtjsStatus } from '@/services/documents';
 
 interface DocumentProps {
@@ -99,14 +100,6 @@ const Document: React.FC<DocumentProps> = ({ setIsNavigationBlocked }) => {
     queryFn: () => residentsService.getById(selectedResidentId),
     enabled: !!selectedResidentId,
   });
-
-  const getFullName = (r: any) => {
-    const first = r.firstName || r.first_name || '';
-    const middle = r.middleName || r.middle_name || '';
-    const last = r.lastName || r.last_name || '';
-    const suffix = r.suffix || '';
-    return `${first} ${middle ? middle + '. ' : ''}${last}${suffix ? ' ' + suffix : ''}`.trim();
-  };
 
   const filteredResidents = useMemo(() => 
     residents.filter(r => 
