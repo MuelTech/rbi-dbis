@@ -1,6 +1,7 @@
 import type { Request, Response, NextFunction } from "express";
 import { prisma, Prisma } from "@rbi/db";
 import { logCreate, logUpdate, logArchive, logAction } from "../services/auditService.js";
+import { buildResidentSearchWhere } from "../services/residentSearch.js";
 
 const STATUS_MAP_TO_DB: Record<string, string> = {
   Active: "Alive",
@@ -45,15 +46,8 @@ export async function getResidents(
     const andClauses: Prisma.ResidentWhereInput[] = [];
 
     if (search) {
-      const searchOr: Prisma.ResidentWhereInput[] = [
-        { firstName: { contains: search } },
-        { lastName: { contains: search } },
-      ];
-      const parsed = parseInt(search);
-      if (!isNaN(parsed)) {
-        searchOr.push({ displayId: { equals: parsed } });
-      }
-      andClauses.push({ OR: searchOr });
+      const searchWhere = buildResidentSearchWhere(search);
+      if (searchWhere) andClauses.push(searchWhere);
     }
 
     if (statusParam) {
