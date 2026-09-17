@@ -438,23 +438,6 @@ export async function batchImportResidents(
             });
           }
 
-          let createdAddress = await tx.address.findFirst({
-            where: {
-              houseNo: fam.address?.house_number ?? "",
-              streetName: fam.address?.street_name ?? "",
-              alleyName: fam.address?.alley ?? "",
-            },
-          });
-          if (!createdAddress) {
-            createdAddress = await tx.address.create({
-              data: {
-                houseNo: fam.address?.house_number ?? "",
-                streetName: fam.address?.street_name ?? "",
-                alleyName: fam.address?.alley ?? "",
-              },
-            });
-          }
-
           const head = fam.head;
           const headData = {
             lastName: head.last_name,
@@ -503,15 +486,32 @@ export async function batchImportResidents(
             where: { headPersonId: headResident.id },
           });
           if (family) {
+            // Update the family's own address row in place. Reusing a shared
+            // address would violate Family.addressId @unique.
+            await tx.address.update({
+              where: { id: family.addressId },
+              data: {
+                houseNo: fam.address?.house_number ?? "",
+                streetName: fam.address?.street_name ?? "",
+                alleyName: fam.address?.alley ?? "",
+              },
+            });
             family = await tx.family.update({
               where: { id: family.id },
               data: {
                 familyName: headData.lastName,
                 householdId: createdHousehold.id,
-                addressId: createdAddress.id,
               },
             });
           } else {
+            // Address is 1:1 with Family, so each new family gets its own row.
+            const createdAddress = await tx.address.create({
+              data: {
+                houseNo: fam.address?.house_number ?? "",
+                streetName: fam.address?.street_name ?? "",
+                alleyName: fam.address?.alley ?? "",
+              },
+            });
             family = await tx.family.create({
               data: {
                 familyName: headData.lastName,
