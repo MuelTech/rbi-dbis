@@ -134,6 +134,28 @@ export async function getResidents(
   }
 }
 
+export async function getResidentLookup(
+  _req: Request,
+  res: Response,
+  next: NextFunction
+) {
+  try {
+    const residents = await prisma.resident.findMany({
+      select: { firstName: true, lastName: true, dateOfBirth: true },
+      orderBy: { displayId: "asc" },
+    });
+    res.json(
+      residents.map((r) => ({
+        firstName: r.firstName,
+        lastName: r.lastName,
+        dateOfBirth: r.dateOfBirth,
+      }))
+    );
+  } catch (err) {
+    next(err);
+  }
+}
+
 async function buildResidentDetail(id: string) {
   const [resident, auditTrails] = await Promise.all([
     prisma.resident.findUnique({
