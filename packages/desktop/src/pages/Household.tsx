@@ -100,8 +100,8 @@ const Household: React.FC<HouseholdProps> = ({ onShowSuccess }) => {
         }, 300);
     };
 
-    const totalCats = households.reduce((sum, item) => sum + item.catCount, 0);
-    const totalDogs = households.reduce((sum, item) => sum + item.dogCount, 0);
+    const totalCats = data?.summary?.cats ?? 0;
+    const totalDogs = data?.summary?.dogs ?? 0;
 
     return (
         <ContentCard>
