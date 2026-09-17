@@ -8,9 +8,10 @@ interface ModalProps {
     children: React.ReactNode;
     maxWidth?: string;
     disableScroll?: boolean;
+    closeDisabled?: boolean;
 }
 
-const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, maxWidth = 'max-w-4xl', disableScroll = false }) => {
+const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, maxWidth = 'max-w-4xl', disableScroll = false, closeDisabled = false }) => {
     useEffect(() => {
         if (isOpen) {
             document.body.style.overflow = 'hidden';
@@ -28,8 +29,8 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, maxWidt
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6">
             {/* Backdrop */}
             <div 
-                className="absolute inset-0 bg-gray-900/20 backdrop-blur-sm transition-opacity" 
-                onClick={onClose}
+                className={`absolute inset-0 bg-gray-900/20 backdrop-blur-sm transition-opacity ${closeDisabled ? 'cursor-default' : ''}`} 
+                onClick={closeDisabled ? undefined : onClose}
             />
 
             {/* Modal Container */}
@@ -47,7 +48,8 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, maxWidt
                     </div>
                     <button 
                         onClick={onClose}
-                        className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                        disabled={closeDisabled}
+                        className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
                     >
                         <X size={20} />
                     </button>
