@@ -19,7 +19,6 @@ interface ImportRow {
 
 interface ImportResult {
   success: number;
-  updated: number;
   duplicates: number;
   errors: number;
 }
@@ -34,7 +33,6 @@ interface ImportProgress {
   chunk: number;
   totalChunks: number;
   created: number;
-  updated: number;
   skipped: number;
   errors: number;
 }
@@ -265,9 +263,8 @@ const BatchImportModal: React.FC<BatchImportModalProps> = ({
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [fileName, setFileName] = useState('');
   const [parsedRows, setParsedRows] = useState<ImportRow[]>([]);
-  const [duplicateAction, setDuplicateAction] = useState<'skip' | 'overwrite'>('skip');
   const [importing, setImporting] = useState(false);
-  const [importResult, setImportResult] = useState<ImportResult>({ success: 0, updated: 0, duplicates: 0, errors: 0 });
+  const [importResult, setImportResult] = useState<ImportResult>({ success: 0, duplicates: 0, errors: 0 });
   const [fileError, setFileError] = useState('');
   const [isDragging, setIsDragging] = useState(false);
   const [progress, setProgress] = useState<ImportProgress | null>(null);
@@ -288,7 +285,7 @@ const BatchImportModal: React.FC<BatchImportModalProps> = ({
   const successCount = parsedRows.filter((r) => r.status === 'success').length;
   const duplicateCount = parsedRows.filter((r) => r.status === 'duplicate').length;
   const errorCount = parsedRows.filter((r) => r.status === 'error').length;
-  const importableCount = successCount + (duplicateAction === 'overwrite' ? duplicateCount : 0);
+  const importableCount = successCount + duplicateCount;
   const totalRows = parsedRows.length;
 
   const familySummaries = useMemo(() => {
@@ -326,9 +323,8 @@ const BatchImportModal: React.FC<BatchImportModalProps> = ({
     setStep(1);
     setFileName('');
     setParsedRows([]);
-    setDuplicateAction('skip');
     setImporting(false);
-    setImportResult({ success: 0, updated: 0, duplicates: 0, errors: 0 });
+    setImportResult({ success: 0, duplicates: 0, errors: 0 });
     setFileError('');
     setIsDragging(false);
     setProgress(null);
@@ -480,14 +476,12 @@ const BatchImportModal: React.FC<BatchImportModalProps> = ({
         try {
           const result = await residentsService.batchImport({
             families: chunks[i],
-            duplicateAction,
           });
           results.push(result);
         } catch (err: any) {
           failed.push(...chunks[i]);
           results.push({
             created: 0,
-            updated: 0,
             skipped: 0,
             families: chunks[i].length,
             errors: [
@@ -500,7 +494,6 @@ const BatchImportModal: React.FC<BatchImportModalProps> = ({
           chunk: i + 1,
           totalChunks: chunks.length,
           created: merged.created,
-          updated: merged.updated,
           skipped: merged.skipped,
           errors: merged.errors.length,
         });
@@ -508,7 +501,7 @@ const BatchImportModal: React.FC<BatchImportModalProps> = ({
 
       return { merged: mergeChunkResults(results), failed };
     },
-    [duplicateAction]
+    []
   );
 
   const handleImport = useCallback(async () => {
@@ -517,18 +510,13 @@ const BatchImportModal: React.FC<BatchImportModalProps> = ({
     setFailedFamilies([]);
     try {
       const importableRows = parsedRows
-        .filter(
-          (r) =>
-            r.status === 'success' ||
-            (r.status === 'duplicate' && duplicateAction === 'overwrite')
-        )
+        .filter((r) => r.status === 'success' || r.status === 'duplicate')
         .map((r) => r.data);
       const families = parseGroupedRows(importableRows);
       const { merged, failed } = await runChunkedImport(families);
 
       setImportResult({
         success: merged.created,
-        updated: merged.updated,
         duplicates: merged.skipped,
         errors: merged.errors.length,
       });
@@ -537,12 +525,12 @@ const BatchImportModal: React.FC<BatchImportModalProps> = ({
       setImporting(false);
       setStep(3);
     } catch {
-      setImportResult({ success: 0, updated: 0, duplicates: 0, errors: 1 });
+      setImportResult({ success: 0, duplicates: 0, errors: 1 });
       setErrorMessages(['Import failed unexpectedly']);
       setImporting(false);
       setStep(3);
     }
-  }, [parsedRows, duplicateAction, runChunkedImport]);
+  }, [parsedRows, runChunkedImport]);
 
   const handleRetryFailed = useCallback(async () => {
     if (failedFamilies.length === 0 || importing) return;
@@ -550,7 +538,6 @@ const BatchImportModal: React.FC<BatchImportModalProps> = ({
     const { merged, failed } = await runChunkedImport(failedFamilies);
     setImportResult((prev) => ({
       success: prev.success + merged.created,
-      updated: prev.updated + merged.updated,
       duplicates: prev.duplicates + merged.skipped,
       errors: merged.errors.length,
     }));
@@ -666,64 +653,9 @@ const BatchImportModal: React.FC<BatchImportModalProps> = ({
           </div>
           <div className="flex gap-4 mt-2 text-[12px] text-gray-500 font-medium">
             <span>{progress.created} created</span>
-            <span>{progress.updated} updated</span>
             <span>{progress.skipped} skipped</span>
             <span>{progress.errors} error(s)</span>
           </div>
-        </div>
-      )}
-
-      {duplicateCount > 0 && (
-        <div className="bg-[#FFFBEB] border border-orange-200 rounded-2xl p-4 flex items-center gap-4">
-          <span className="text-[13px] font-bold text-[#9A3412]">Duplicate handling:</span>
-
-          <label
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl border cursor-pointer transition-all ${
-              duplicateAction === 'skip'
-                ? 'bg-white border-blue-200 shadow-sm ring-1 ring-blue-200 text-blue-700'
-                : 'bg-white border-gray-200 hover:bg-gray-50 text-gray-600'
-            }`}
-          >
-            <input
-              type="radio"
-              name="dupAction"
-              className="hidden"
-              checked={duplicateAction === 'skip'}
-              onChange={() => setDuplicateAction('skip')}
-            />
-            <div
-              className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
-                duplicateAction === 'skip' ? 'border-blue-600' : 'border-gray-300'
-              }`}
-            >
-              {duplicateAction === 'skip' && <div className="w-2 h-2 rounded-full bg-blue-600" />}
-            </div>
-            <span className="text-[13px] font-medium">Skip duplicates</span>
-          </label>
-
-          <label
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl border cursor-pointer transition-all ${
-              duplicateAction === 'overwrite'
-                ? 'bg-white border-blue-200 shadow-sm ring-1 ring-blue-200 text-blue-700'
-                : 'bg-white border-gray-200 hover:bg-gray-50 text-gray-600'
-            }`}
-          >
-            <input
-              type="radio"
-              name="dupAction"
-              className="hidden"
-              checked={duplicateAction === 'overwrite'}
-              onChange={() => setDuplicateAction('overwrite')}
-            />
-            <div
-              className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
-                duplicateAction === 'overwrite' ? 'border-blue-600' : 'border-gray-300'
-              }`}
-            >
-              {duplicateAction === 'overwrite' && <div className="w-2 h-2 rounded-full bg-blue-600" />}
-            </div>
-            <span className="text-[13px] font-medium">Overwrite existing</span>
-          </label>
         </div>
       )}
 
@@ -801,8 +733,8 @@ const BatchImportModal: React.FC<BatchImportModalProps> = ({
           <div className="text-[13px] font-medium text-[#166534]/70">Imported</div>
         </div>
         <div className="bg-[#FFFBEB] border border-orange-200 rounded-2xl p-4 text-center">
-          <div className="text-2xl font-bold text-[#9A3412]">{importResult.updated}</div>
-          <div className="text-[13px] font-medium text-[#9A3412]/70">Overwritten</div>
+          <div className="text-2xl font-bold text-[#9A3412]">{importResult.duplicates}</div>
+          <div className="text-[13px] font-medium text-[#9A3412]/70">Skipped</div>
         </div>
         <div className="bg-[#FEF2F2] border border-red-200 rounded-2xl p-4 text-center">
           <div className="text-2xl font-bold text-[#991B1B]">{importResult.errors}</div>

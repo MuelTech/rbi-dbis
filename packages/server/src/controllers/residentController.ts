@@ -2,10 +2,6 @@ import type { Request, Response, NextFunction } from "express";
 import { prisma, Prisma } from "@rbi/db";
 import { logUpdate, logArchive, logAction } from "../services/auditService.js";
 import { buildResidentSearchWhere } from "../services/residentSearch.js";
-import {
-  planFamilyMemberLinks,
-  type DuplicateAction,
-} from "../services/familyMemberPlan.js";
 import { validateFamilyImportRow } from "../services/familyImportValidation.js";
 
 const STATUS_MAP_TO_DB: Record<string, string> = {
@@ -395,8 +391,6 @@ export async function batchImportResidents(
 ) {
   try {
     const { families } = req.body;
-    const duplicateAction: DuplicateAction =
-      req.body.duplicateAction === "overwrite" ? "overwrite" : "skip";
 
     if (!Array.isArray(families) || families.length === 0) {
       res.status(400).json({ error: "families array is required" });
@@ -404,7 +398,6 @@ export async function batchImportResidents(
     }
 
     let totalCreated = 0;
-    let totalUpdated = 0;
     let totalSkipped = 0;
     const errors: string[] = [];
 
@@ -418,7 +411,7 @@ export async function batchImportResidents(
       }
 
       try {
-        await prisma.$transaction(async (tx) => {
+        const delta = await prisma.$transaction(async (tx) => {
           let block = await tx.block.findFirst({
             where: { blockNumber: fam.household?.block },
           });
@@ -464,77 +457,32 @@ export async function batchImportResidents(
               dateOfBirth: headData.dateOfBirth,
             },
           });
-
-          let headResident;
           if (existingHead) {
-            if (duplicateAction === "overwrite") {
-              headResident = await tx.resident.update({
-                where: { id: existingHead.id },
-                data: headData,
-              });
-              totalUpdated++;
-            } else {
-              totalSkipped++;
-              return;
-            }
-          } else {
-            headResident = await tx.resident.create({ data: headData });
-            totalCreated++;
+            // Create-only import: an existing head means the family is already
+            // registered. Skip it rather than attempting an id-less update.
+            return { created: 0, skipped: 1 };
           }
 
-          let family = await tx.family.findFirst({
-            where: { headPersonId: headResident.id },
-          });
-          if (family) {
-            // Update the family's own address row in place. Reusing a shared
-            // address would violate Family.addressId @unique.
-            await tx.address.update({
-              where: { id: family.addressId },
-              data: {
-                houseNo: fam.address?.house_number ?? "",
-                streetName: fam.address?.street_name ?? "",
-                alleyName: fam.address?.alley ?? "",
-              },
-            });
-            family = await tx.family.update({
-              where: { id: family.id },
-              data: {
-                familyName: headData.lastName,
-                householdId: createdHousehold.id,
-              },
-            });
-          } else {
-            // Address is 1:1 with Family, so each new family gets its own row.
-            const createdAddress = await tx.address.create({
-              data: {
-                houseNo: fam.address?.house_number ?? "",
-                streetName: fam.address?.street_name ?? "",
-                alleyName: fam.address?.alley ?? "",
-              },
-            });
-            family = await tx.family.create({
-              data: {
-                familyName: headData.lastName,
-                householdId: createdHousehold.id,
-                headPersonId: headResident.id,
-                addressId: createdAddress.id,
-              },
-            });
-          }
+          const headResident = await tx.resident.create({ data: headData });
+          let created = 1;
+          let skipped = 0;
 
-          // Pet/vehicle are replaced on import; neither can orphan a resident.
-          await tx.familyPet.deleteMany({ where: { familyId: family.id } });
-          await tx.familyVehicle.deleteMany({ where: { familyId: family.id } });
-
-          // Member links are reconciled, never blanket-deleted: a member omitted
-          // from the import must not be orphaned.
-          const existingLinks = await tx.familyMember.findMany({
-            where: { familyId: family.id },
-            select: { id: true, residentId: true },
+          // Address is 1:1 with Family, so every new family gets its own row.
+          const createdAddress = await tx.address.create({
+            data: {
+              houseNo: fam.address?.house_number ?? "",
+              streetName: fam.address?.street_name ?? "",
+              alleyName: fam.address?.alley ?? "",
+            },
           });
-          const linkIdByResident = new Map(
-            existingLinks.map((l) => [l.residentId, l.id])
-          );
+          const family = await tx.family.create({
+            data: {
+              familyName: headData.lastName,
+              householdId: createdHousehold.id,
+              headPersonId: headResident.id,
+              addressId: createdAddress.id,
+            },
+          });
 
           if (fam.pet?.has_pets === "Yes" || fam.pet?.has_pets === true) {
             await tx.familyPet.create({
@@ -560,9 +508,7 @@ export async function batchImportResidents(
             });
           }
 
-          const members = fam.members ?? [];
-          const incoming: { residentId: string; relationshipType: string }[] = [];
-          for (const m of members) {
+          for (const m of fam.members ?? []) {
             const memberData = {
               lastName: m.last_name,
               firstName: m.first_name,
@@ -587,80 +533,29 @@ export async function batchImportResidents(
                 dateOfBirth: memberData.dateOfBirth,
               },
             });
-
-            let memberResident;
             if (existingMember) {
-              if (duplicateAction === "overwrite") {
-                memberResident = await tx.resident.update({
-                  where: { id: existingMember.id },
-                  data: memberData,
-                });
-                totalUpdated++;
-              } else {
-                memberResident = existingMember;
-                totalSkipped++;
-              }
-            } else {
-              memberResident = await tx.resident.create({ data: memberData });
-              totalCreated++;
-            }
-
-            incoming.push({
-              residentId: memberResident.id,
-              relationshipType: m.relationship,
-            });
-          }
-
-          const plan = planFamilyMemberLinks(
-            existingLinks.map((l) => l.residentId),
-            incoming.map((i) => i.residentId),
-            duplicateAction
-          );
-          const relationshipByResident = new Map(
-            incoming.map((i) => [i.residentId, i.relationshipType])
-          );
-
-          // A resident can belong to only one family (FamilyMember.residentId is
-          // unique), so never link one that is already attached elsewhere.
-          const linkedToAnotherFamily = new Set(
-            plan.toCreate.length > 0
-              ? (
-                  await tx.familyMember.findMany({
-                    where: {
-                      residentId: { in: plan.toCreate },
-                      familyId: { not: family.id },
-                    },
-                    select: { residentId: true },
-                  })
-                ).map((l) => l.residentId)
-              : []
-          );
-
-          for (const residentId of plan.toCreate) {
-            if (linkedToAnotherFamily.has(residentId)) {
-              totalSkipped++;
+              // Already registered (possibly in another family); never create a
+              // duplicate or steal an existing link.
+              skipped++;
               continue;
             }
+
+            const memberResident = await tx.resident.create({ data: memberData });
+            created++;
             await tx.familyMember.create({
               data: {
                 familyId: family.id,
-                residentId,
-                relationshipType: relationshipByResident.get(residentId) ?? "",
+                residentId: memberResident.id,
+                relationshipType: m.relationship,
               },
             });
           }
 
-          for (const residentId of plan.toUpdate) {
-            const linkId = linkIdByResident.get(residentId);
-            if (!linkId) continue;
-            await tx.familyMember.update({
-              where: { id: linkId },
-              data: {
-                relationshipType: relationshipByResident.get(residentId) ?? "",
-              },
-            });
-          }
+          return { created, skipped };
         });
+
+        totalCreated += delta.created;
+        totalSkipped += delta.skipped;
       } catch (err: any) {
         errors.push(`Family ${fam.head?.last_name ?? "unknown"}: ${err.message}`);
       }
@@ -675,13 +570,12 @@ export async function batchImportResidents(
         userId,
         "CREATE",
         null,
-        `Batch import: ${totalCreated} created, ${totalUpdated} updated, ${totalSkipped} skipped, ${errors.length} errors`
+        `Batch import: ${totalCreated} created, ${totalSkipped} skipped, ${errors.length} errors`
       );
     }
 
     res.json({
       created: totalCreated,
-      updated: totalUpdated,
       skipped: totalSkipped,
       families: families.length,
       errors,

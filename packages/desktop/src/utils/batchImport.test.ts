@@ -24,12 +24,11 @@ describe("mergeChunkResults", () => {
   it("sums counts and concatenates errors", () => {
     expect(
       mergeChunkResults([
-        { created: 1, updated: 2, skipped: 3, families: 4, errors: ["a"] },
-        { created: 5, updated: 6, skipped: 7, families: 8, errors: ["b", "c"] },
+        { created: 1, skipped: 3, families: 4, errors: ["a"] },
+        { created: 5, skipped: 7, families: 8, errors: ["b", "c"] },
       ])
     ).toEqual({
       created: 6,
-      updated: 8,
       skipped: 10,
       families: 12,
       errors: ["a", "b", "c"],
@@ -39,7 +38,6 @@ describe("mergeChunkResults", () => {
   it("returns zeros and no errors for an empty result list", () => {
     expect(mergeChunkResults([])).toEqual({
       created: 0,
-      updated: 0,
       skipped: 0,
       families: 0,
       errors: [],
