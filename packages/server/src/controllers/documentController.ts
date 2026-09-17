@@ -1,5 +1,5 @@
 import type { Request, Response, NextFunction } from "express";
-import { prisma } from "@rbi/db";
+import { prisma, Prisma } from "@rbi/db";
 import { logCreate } from "../services/auditService.js";
 import {
   FTJS_DOCUMENT_NAME,
@@ -267,7 +267,7 @@ export async function createDocument(
 
     const issueDate = new Date();
     let formPayload: Record<string, unknown> | null =
-      formData && typeof formData === "object"
+      formData && typeof formData === "object" && formData !== null
         ? { ...(formData as Record<string, unknown>) }
         : null;
     let storedValidity: string | null = validityPeriod || null;
@@ -276,7 +276,7 @@ export async function createDocument(
       const until = computeFtjsValidUntil(issueDate);
       storedValidity = until.toISOString().slice(0, 10);
       if (!formPayload) formPayload = {};
-      if (!formPayload.validUntil) {
+      if (formPayload.validUntil == null) {
         formPayload.validUntil = storedValidity;
       }
     }
@@ -288,7 +288,7 @@ export async function createDocument(
           issueDate,
           purpose: purpose || null,
           validityPeriod: storedValidity,
-          formData: formPayload || null,
+          formData: (formPayload as Prisma.InputJsonObject | null) ?? Prisma.DbNull,
           documentTypeId,
         },
       });
