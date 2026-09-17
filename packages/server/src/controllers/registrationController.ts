@@ -1,6 +1,7 @@
 import type { Request, Response, NextFunction } from "express";
 import { prisma } from "@rbi/db";
 import { logCreate } from "../services/auditService.js";
+import { validateResident } from "../services/residentValidation.js";
 
 export async function registerFamily(
   req: Request,
@@ -32,6 +33,57 @@ export async function registerFamily(
     }
     if (familyMembers && !Array.isArray(familyMembers)) {
       res.status(400).json({ error: "familyMembers must be an array" });
+      return;
+    }
+
+    const validationErrors: string[] = [];
+    const validateAndNormalize = (person: any, label: string) => {
+      const { errors, value } = validateResident(
+        {
+          firstName: person?.firstName,
+          lastName: person?.lastName,
+          middleName: person?.middleName,
+          suffix: person?.suffix,
+          placeOfBirth: person?.placeOfBirth,
+          dateOfBirth: person?.dateOfBirth,
+          sex: person?.sex,
+          civilStatus: person?.civilStatus,
+          occupation: person?.occupationType,
+          educationLevel: person?.studentType,
+          isVoter: person?.isVoter,
+          isPwd: person?.isPwd,
+          isSoloParent: person?.isSoloParent,
+          isOwner: person?.isOwner,
+          contactNumber: person?.contactNumber,
+        },
+        { requireCore: true }
+      );
+      for (const e of errors) validationErrors.push(`${label}: ${e}`);
+
+      if (value.firstName !== undefined) person.firstName = value.firstName;
+      if (value.lastName !== undefined) person.lastName = value.lastName;
+      if (value.middleName !== undefined) person.middleName = value.middleName;
+      if (value.suffix !== undefined) person.suffix = value.suffix;
+      if (value.placeOfBirth !== undefined) person.placeOfBirth = value.placeOfBirth;
+      if (value.dateOfBirth !== undefined) person.dateOfBirth = value.dateOfBirth;
+      if (value.sex !== undefined) person.sex = value.sex;
+      if (value.civilStatus !== undefined) person.civilStatus = value.civilStatus;
+      if (value.occupation !== undefined) person.occupationType = value.occupation;
+      if (value.educationLevel !== undefined) person.studentType = value.educationLevel;
+      if (value.isVoter !== undefined) person.isVoter = value.isVoter;
+      if (value.isPwd !== undefined) person.isPwd = value.isPwd;
+      if (value.isSoloParent !== undefined) person.isSoloParent = value.isSoloParent;
+      if (value.isOwner !== undefined) person.isOwner = value.isOwner;
+      if (value.contactNumber !== undefined) person.contactNumber = value.contactNumber;
+    };
+
+    validateAndNormalize(head, "Head");
+    (familyMembers ?? []).forEach((m: any, i: number) =>
+      validateAndNormalize(m, `Member ${i + 1}`)
+    );
+
+    if (validationErrors.length > 0) {
+      res.status(400).json({ error: validationErrors.join("; ") });
       return;
     }
 

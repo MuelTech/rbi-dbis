@@ -3,6 +3,7 @@ import { prisma, Prisma } from "@rbi/db";
 import { logUpdate, logArchive, logAction } from "../services/auditService.js";
 import { buildResidentSearchWhere } from "../services/residentSearch.js";
 import { validateFamilyImportRow } from "../services/familyImportValidation.js";
+import { validateResident } from "../services/residentValidation.js";
 
 const STATUS_MAP_TO_DB: Record<string, string> = {
   Active: "Alive",
@@ -311,6 +312,34 @@ export async function updateResident(
     const oldResident = await prisma.resident.findUnique({ where: { id } });
     if (!oldResident) return res.status(404).json({ error: "Resident not found" });
 
+    const { errors: validationErrors, value: normalized } = validateResident({
+      firstName: body.firstName,
+      lastName: body.lastName,
+      middleName: body.middleName,
+      suffix: body.suffix,
+      placeOfBirth: body.placeOfBirth,
+      dateOfBirth: body.dateOfBirth,
+      sex: body.sex,
+      civilStatus: body.civilStatus,
+      occupation: body.occupation,
+      educationLevel: body.studentType,
+      isVoter: body.isVoter,
+      isPwd: body.isPwd,
+      isSoloParent: body.isSoloParent,
+      isOwner: body.isOwner,
+      contactNumber: body.contactNumber,
+    });
+    // A provided-but-blank required name is an attempt to clear it.
+    if (body.firstName !== undefined && !normalized.firstName) {
+      validationErrors.push("First name is required");
+    }
+    if (body.lastName !== undefined && !normalized.lastName) {
+      validationErrors.push("Last name is required");
+    }
+    if (validationErrors.length > 0) {
+      return res.status(400).json({ error: validationErrors.join("; ") });
+    }
+
     const dbData: Record<string, unknown> = {};
 
     const directFields = [
@@ -318,19 +347,27 @@ export async function updateResident(
       "placeOfBirth", "civilStatus", "contactNumber", "profileImage",
     ] as const;
     for (const f of directFields) {
-      if (body[f] !== undefined) dbData[f] = body[f];
+      if (body[f] !== undefined) dbData[f] = normalized[f] ?? body[f];
     }
 
     if (body.dateOfBirth !== undefined) {
-      dbData.dateOfBirth = body.dateOfBirth ? new Date(body.dateOfBirth) : null;
+      dbData.dateOfBirth = body.dateOfBirth
+        ? (normalized.dateOfBirth ?? new Date(body.dateOfBirth))
+        : null;
     }
-    if (body.sex !== undefined) dbData.sex = body.sex;
-    if (body.occupation !== undefined) dbData.occupationType = body.occupation;
-    if (body.studentType !== undefined) dbData.studentType = body.studentType;
-    if (body.isVoter !== undefined) dbData.isVoter = body.isVoter;
-    if (body.isPwd !== undefined) dbData.isPwd = body.isPwd;
-    if (body.isSoloParent !== undefined) dbData.isSoloParent = body.isSoloParent;
-    if (body.isOwner !== undefined) dbData.isOwner = body.isOwner;
+    if (body.sex !== undefined) dbData.sex = normalized.sex ?? body.sex;
+    if (body.occupation !== undefined) {
+      dbData.occupationType = normalized.occupation ?? body.occupation;
+    }
+    if (body.studentType !== undefined) {
+      dbData.studentType = normalized.educationLevel ?? body.studentType;
+    }
+    if (body.isVoter !== undefined) dbData.isVoter = normalized.isVoter ?? body.isVoter;
+    if (body.isPwd !== undefined) dbData.isPwd = normalized.isPwd ?? body.isPwd;
+    if (body.isSoloParent !== undefined) {
+      dbData.isSoloParent = normalized.isSoloParent ?? body.isSoloParent;
+    }
+    if (body.isOwner !== undefined) dbData.isOwner = normalized.isOwner ?? body.isOwner;
 
     if (body.status !== undefined) {
       const mapped = STATUS_MAP_TO_DB[body.status];
@@ -424,6 +461,68 @@ export async function batchImportResidents(
         continue;
       }
 
+      const headRow = fam.head ?? {};
+      const headValidation = validateResident(
+        {
+          firstName: headRow.first_name,
+          lastName: headRow.last_name,
+          middleName: headRow.middle_name,
+          suffix: headRow.suffix,
+          placeOfBirth: headRow.place_of_birth,
+          dateOfBirth: headRow.date_of_birth,
+          sex: headRow.sex,
+          civilStatus: headRow.civil_status,
+          occupation: headRow.occupation,
+          educationLevel: headRow.education_level,
+          isStudent: headRow.is_student === "Yes" || headRow.is_student === true,
+          isVoter: headRow.is_voter,
+          isPwd: headRow.is_pwd,
+          isSoloParent: headRow.is_solo_parent,
+          isOwner: headRow.is_owner,
+          contactNumber: headRow.contact_number,
+        },
+        { requireCore: true }
+      );
+      const memberValidations = ((fam.members ?? []) as any[]).map(
+        (m: any, index: number) => ({
+          row: m,
+          index,
+          result: validateResident(
+            {
+              firstName: m.first_name,
+              lastName: m.last_name,
+              middleName: m.middle_name,
+              suffix: m.suffix,
+              placeOfBirth: m.place_of_birth,
+              dateOfBirth: m.date_of_birth,
+              sex: m.sex,
+              civilStatus: m.civil_status,
+              occupation: m.occupation,
+              educationLevel: m.education_level,
+              isStudent: m.is_student === "Yes" || m.is_student === true,
+              isVoter: m.is_voter,
+              isPwd: m.is_pwd,
+              isSoloParent: m.is_solo_parent,
+              contactNumber: m.contact_number,
+            },
+            { requireCore: true }
+          ),
+        })
+      );
+
+      const rowErrors = [
+        ...headValidation.errors.map((e) => `Head: ${e}`),
+        ...memberValidations.flatMap((mv) =>
+          mv.result.errors.map((e) => `Member ${mv.index + 1}: ${e}`)
+        ),
+      ];
+      if (rowErrors.length > 0) {
+        errors.push(
+          `Family ${headRow.last_name ?? "unknown"}: ${rowErrors.join("; ")}`
+        );
+        continue;
+      }
+
       try {
         const delta = await prisma.$transaction(async (tx) => {
           let block = await tx.block.findFirst({
@@ -435,7 +534,11 @@ export async function batchImportResidents(
             });
           }
 
-          const hhNum = String(fam.household?.household_number ?? "").padStart(3, "0");
+          const hhParsed = parseInt(
+            String(fam.household?.household_number ?? ""),
+            10
+          );
+          const hhNum = String(hhParsed).padStart(3, "0");
           let createdHousehold = await tx.household.findFirst({
             where: { blockId: block.id, brgyHouseholdNo: hhNum },
           });
@@ -445,24 +548,27 @@ export async function batchImportResidents(
             });
           }
 
-          const head = fam.head;
+          const hv = headValidation.value;
           const headData = {
-            lastName: head.last_name,
-            firstName: head.first_name,
-            middleName: head.middle_name || null,
-            suffix: head.suffix || null,
-            placeOfBirth: head.place_of_birth || null,
-            dateOfBirth: head.date_of_birth ? new Date(head.date_of_birth) : null,
-            sex: head.sex,
-            civilStatus: head.civil_status || null,
-            isVoter: head.is_voter === "Yes" || head.is_voter === true,
-            isPwd: head.is_pwd === "Yes" || head.is_pwd === true,
-            isSoloParent: head.is_solo_parent === "Yes" || head.is_solo_parent === true,
-            isOwner: head.is_owner === "Yes" || head.is_owner === true,
-            occupationType: head.occupation || null,
-            contactNumber: head.contact_number || null,
-            studentType: head.is_student === "Yes" ? (head.education_level || "Student") : null,
-            registeredAt: parseRegisteredAt(head.registered_at),
+            lastName: hv.lastName as string,
+            firstName: hv.firstName as string,
+            middleName: (hv.middleName as string) ?? null,
+            suffix: (hv.suffix as string) ?? null,
+            placeOfBirth: (hv.placeOfBirth as string) ?? null,
+            dateOfBirth: (hv.dateOfBirth as Date) ?? null,
+            sex: hv.sex as "Male" | "Female",
+            civilStatus: (hv.civilStatus as string) ?? null,
+            isVoter: hv.isVoter === true,
+            isPwd: hv.isPwd === true,
+            isSoloParent: hv.isSoloParent === true,
+            isOwner: hv.isOwner === true,
+            occupationType: (hv.occupation as string) ?? null,
+            contactNumber: (hv.contactNumber as string) ?? null,
+            studentType:
+              hv.isStudent === true
+                ? ((hv.educationLevel as string) ?? null)
+                : null,
+            registeredAt: parseRegisteredAt(headRow.registered_at),
           };
 
           const existingHead = await tx.resident.findFirst({
@@ -523,23 +629,30 @@ export async function batchImportResidents(
             });
           }
 
-          for (const m of fam.members ?? []) {
+          for (const mv of memberValidations) {
+            const m = mv.row;
+            const v = mv.result.value;
             const memberData = {
-              lastName: m.last_name,
-              firstName: m.first_name,
-              middleName: m.middle_name || null,
-              suffix: m.suffix || null,
-              placeOfBirth: m.place_of_birth || null,
-              dateOfBirth: m.date_of_birth ? new Date(m.date_of_birth) : null,
-              sex: m.sex,
-              civilStatus: m.civil_status || null,
-              isVoter: m.is_voter === "Yes" || m.is_voter === true,
-              isPwd: m.is_pwd === "Yes" || m.is_pwd === true,
-              isSoloParent: m.is_solo_parent === "Yes" || m.is_solo_parent === true,
-              occupationType: m.occupation || null,
-              contactNumber: m.contact_number || null,
-              studentType: m.is_student === "Yes" ? (m.education_level || "Student") : null,
-              registeredAt: parseRegisteredAt(m.registered_at ?? head.registered_at),
+              lastName: v.lastName as string,
+              firstName: v.firstName as string,
+              middleName: (v.middleName as string) ?? null,
+              suffix: (v.suffix as string) ?? null,
+              placeOfBirth: (v.placeOfBirth as string) ?? null,
+              dateOfBirth: (v.dateOfBirth as Date) ?? null,
+              sex: v.sex as "Male" | "Female",
+              civilStatus: (v.civilStatus as string) ?? null,
+              isVoter: v.isVoter === true,
+              isPwd: v.isPwd === true,
+              isSoloParent: v.isSoloParent === true,
+              occupationType: (v.occupation as string) ?? null,
+              contactNumber: (v.contactNumber as string) ?? null,
+              studentType:
+                v.isStudent === true
+                  ? ((v.educationLevel as string) ?? null)
+                  : null,
+              registeredAt: parseRegisteredAt(
+                m.registered_at ?? headRow.registered_at
+              ),
             };
 
             const existingMember = await tx.resident.findFirst({
