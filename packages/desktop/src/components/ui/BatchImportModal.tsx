@@ -1,14 +1,12 @@
 import React, { useState, useRef, useCallback, useMemo } from 'react';
-import { Upload, Download, FileText, Check, X, AlertTriangle, Users, ChevronLeft } from 'lucide-react';
+import { Upload, Download, FileText, Check, AlertTriangle, ChevronLeft } from 'lucide-react';
 import * as XLSX from 'xlsx';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import Modal from '@/components/ui/Modal';
 import { residentsService } from '@/services/residents';
-import { chunkFamilies, mergeChunkResults, type BatchImportResult } from '@/utils/batchImport';
+import { chunkFamilies, mergeChunkResults, summarizeImportFamilies, type BatchImportResult, type ImportRowStatus } from '@/utils/batchImport';
 
 // --- Types ---
-
-type ImportRowStatus = 'success' | 'duplicate' | 'error';
 
 interface ImportRow {
   rowNumber: number;
@@ -260,6 +258,7 @@ const BatchImportModal: React.FC<BatchImportModalProps> = ({
   onClose,
   onImportComplete,
 }) => {
+  const queryClient = useQueryClient();
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [fileName, setFileName] = useState('');
   const [parsedRows, setParsedRows] = useState<ImportRow[]>([]);
@@ -288,30 +287,10 @@ const BatchImportModal: React.FC<BatchImportModalProps> = ({
   const importableCount = successCount + duplicateCount;
   const totalRows = parsedRows.length;
 
-  const familySummaries = useMemo(() => {
-    const byFamily = new Map<string, ImportRow[]>();
-    for (const row of parsedRows) {
-      const id = row.data.family_id;
-      if (!id) continue;
-      const list = byFamily.get(id);
-      if (list) list.push(row);
-      else byFamily.set(id, [row]);
-    }
-    return Array.from(byFamily.entries()).map(([familyId, rows]) => {
-      const head = rows.find((r) => r.data.relationship?.toLowerCase() === 'head') ?? rows[0];
-      const hasError = rows.some((r) => r.status === 'error');
-      const allDuplicate = rows.every((r) => r.status === 'duplicate');
-      const firstError = rows.find((r) => r.status === 'error');
-      const status: ImportRowStatus = hasError ? 'error' : allDuplicate ? 'duplicate' : 'success';
-      return {
-        familyId,
-        headName: `${head?.data.first_name ?? ''} ${head?.data.last_name ?? ''}`.trim(),
-        memberCount: rows.filter((r) => r.data.relationship?.toLowerCase() !== 'head').length,
-        status,
-        message: hasError && firstError ? firstError.message : allDuplicate ? 'All residents already exist' : '',
-      };
-    });
-  }, [parsedRows]);
+  const familySummaries = useMemo(
+    () => summarizeImportFamilies(parsedRows),
+    [parsedRows]
+  );
 
   const previewTotalPages = Math.max(1, Math.ceil(familySummaries.length / PREVIEW_PAGE_SIZE));
   const previewRows = familySummaries.slice(
@@ -512,7 +491,9 @@ const BatchImportModal: React.FC<BatchImportModalProps> = ({
       const importableRows = parsedRows
         .filter((r) => r.status === 'success' || r.status === 'duplicate')
         .map((r) => r.data);
-      const families = parseGroupedRows(importableRows);
+      const families = parseGroupedRows(importableRows).filter(
+        (f) => f.head?.relationship?.toLowerCase() === 'head'
+      );
       const { merged, failed } = await runChunkedImport(families);
 
       setImportResult({
@@ -522,6 +503,7 @@ const BatchImportModal: React.FC<BatchImportModalProps> = ({
       });
       setErrorMessages(merged.errors);
       setFailedFamilies(failed);
+      queryClient.invalidateQueries({ queryKey: ['residents-lookup'] });
       setImporting(false);
       setStep(3);
     } catch {
@@ -530,21 +512,23 @@ const BatchImportModal: React.FC<BatchImportModalProps> = ({
       setImporting(false);
       setStep(3);
     }
-  }, [parsedRows, runChunkedImport]);
+  }, [parsedRows, runChunkedImport, queryClient]);
 
   const handleRetryFailed = useCallback(async () => {
     if (failedFamilies.length === 0 || importing) return;
     setImporting(true);
     const { merged, failed } = await runChunkedImport(failedFamilies);
+    const retainedErrors = errorMessages.filter((m) => !m.startsWith('Chunk '));
     setImportResult((prev) => ({
       success: prev.success + merged.created,
       duplicates: prev.duplicates + merged.skipped,
-      errors: merged.errors.length,
+      errors: retainedErrors.length + merged.errors.length,
     }));
-    setErrorMessages(merged.errors);
+    setErrorMessages([...retainedErrors, ...merged.errors]);
     setFailedFamilies(failed);
+    queryClient.invalidateQueries({ queryKey: ['residents-lookup'] });
     setImporting(false);
-  }, [failedFamilies, importing, runChunkedImport]);
+  }, [failedFamilies, importing, errorMessages, runChunkedImport, queryClient]);
 
   const handleDownloadErrorReport = useCallback(() => {
     if (errorMessages.length === 0) return;
@@ -627,9 +611,9 @@ const BatchImportModal: React.FC<BatchImportModalProps> = ({
       {totalRows > LARGE_IMPORT_WARNING && (
         <div className="flex items-center gap-2 bg-[#FFFBEB] border border-orange-200 rounded-2xl px-4 py-3 text-[13px] font-medium text-[#9A3412]">
           <AlertTriangle className="w-4 h-4 shrink-0" />
-          Large import: {totalRows} rows. It will be sent in{' '}
-          {Math.ceil(totalRows / CHUNK_SIZE)} chunks — keep this window open until it
-          finishes.
+          Large import: {totalRows} rows across {familySummaries.length} families. It
+          will be sent in {Math.ceil(familySummaries.length / CHUNK_SIZE)} chunks —
+          keep this window open until it finishes.
         </div>
       )}
 
@@ -839,7 +823,7 @@ const BatchImportModal: React.FC<BatchImportModalProps> = ({
   );
 
   return (
-    <Modal isOpen={isOpen} onClose={handleClose} title="Batch Import Residents" maxWidth="max-w-4xl" disableScroll={true}>
+    <Modal isOpen={isOpen} onClose={handleClose} title="Batch Import Residents" maxWidth="max-w-4xl" disableScroll={true} closeDisabled={importing}>
       <div className="flex-1 overflow-y-auto p-6 custom-scrollbar">
         <StepIndicator currentStep={step} />
         {step === 1 && renderStep1()}
