@@ -177,6 +177,7 @@ const AddResidentForm: React.FC<AddResidentFormProps> = ({ onCancel, setIsNaviga
         headIsVoter: false,
         headIsPwd: false,
         headIsSoloParent: false,
+        headIsHomeowner: false,
     });
 
     const [familyMembers, setFamilyMembers] = useState<FamilyMember[]>([]);
@@ -1311,7 +1312,7 @@ const AddResidentForm: React.FC<AddResidentFormProps> = ({ onCancel, setIsNaviga
                                         isVoter: formData.headIsVoter,
                                         isPwd: formData.headIsPwd,
                                         isSoloParent: formData.headIsSoloParent,
-                                        isOwner: false,
+                                        isOwner: formData.headIsHomeowner,
                                         occupationType: formData.headOccupation || undefined,
                                         contactNumber: formData.headContactNumber || undefined,
                                         studentType: formData.headIsStudent === 'Yes' ? formData.headEducationLevel : undefined,
