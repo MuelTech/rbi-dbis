@@ -5,6 +5,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import Modal from '@/components/ui/Modal';
 import { residentsService } from '@/services/residents';
 import { chunkFamilies, mergeChunkResults, summarizeImportFamilies, type BatchImportResult, type ImportRowStatus } from '@/utils/batchImport';
+import { readSheetRows } from '@/utils/spreadsheet';
 
 // --- Types ---
 
@@ -344,30 +345,19 @@ const BatchImportModal: React.FC<BatchImportModalProps> = ({
       const reader = new FileReader();
       reader.onload = (evt) => {
         try {
-          const data = new Uint8Array(evt.target?.result as ArrayBuffer);
-          const workbook = XLSX.read(data, { type: 'array' });
-          const sheet = workbook.Sheets[workbook.SheetNames[0]];
-          const json: Record<string, string>[] = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+          const rows = readSheetRows(evt.target?.result as ArrayBuffer);
 
-          if (json.length === 0) {
+          if (rows.length === 0) {
             setFileError('The uploaded file has no data rows. Please add resident data below the header row.');
             return;
           }
 
-          if (json.length > MAX_ROWS) {
-            setFileError(`File contains ${json.length} rows. Maximum allowed is ${MAX_ROWS} rows per import.`);
+          if (rows.length > MAX_ROWS) {
+            setFileError(`File contains ${rows.length} rows. Maximum allowed is ${MAX_ROWS} rows per import.`);
             return;
           }
 
-          const normalizedRows = json.map((row) => {
-            const normalized: Record<string, string> = {};
-            for (const key of Object.keys(row)) {
-              normalized[key.toLowerCase().trim().replace(/\s+/g, '_')] = String(row[key]).trim();
-            }
-            return normalized;
-          });
-
-          const importRows: ImportRow[] = normalizedRows.map((row, index) => {
+          const importRows: ImportRow[] = rows.map((row, index) => {
             const isHead = row.relationship?.toLowerCase() === 'head';
             const errors = validateRow(row, isHead);
             if (errors.length > 0) {
