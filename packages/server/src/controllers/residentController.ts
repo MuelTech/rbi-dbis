@@ -6,6 +6,7 @@ import {
   planFamilyMemberLinks,
   type DuplicateAction,
 } from "../services/familyMemberPlan.js";
+import { validateFamilyImportRow } from "../services/familyImportValidation.js";
 
 const STATUS_MAP_TO_DB: Record<string, string> = {
   Active: "Alive",
@@ -386,6 +387,14 @@ export async function batchImportResidents(
     const errors: string[] = [];
 
     for (const fam of families) {
+      const validationError = validateFamilyImportRow(fam);
+      if (validationError) {
+        errors.push(
+          `Family ${fam?.head?.last_name ?? "unknown"}: ${validationError}`
+        );
+        continue;
+      }
+
       try {
         await prisma.$transaction(async (tx) => {
           let block = await tx.block.findFirst({
