@@ -56,11 +56,11 @@ export async function getHouseholds(
       }),
       prisma.familyPet.aggregate({
         _sum: { numberOfCats: true, numberOfDogs: true },
-        where: { family: { isArchived: false } },
+        where: { family: { isArchived: false, household: where } },
       }),
       prisma.familyVehicle.aggregate({
         _sum: { numberOfMotorcycles: true, numberOfVehicles: true },
-        where: { family: { isArchived: false } },
+        where: { family: { isArchived: false, household: where } },
       }),
     ]);
 
