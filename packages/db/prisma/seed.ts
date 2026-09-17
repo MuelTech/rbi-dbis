@@ -61,10 +61,9 @@ async function main() {
 
   const documentTypes = [
     { documentName: "Barangay Business Clearance", amount: 500 },
-    { documentName: "Business Permit", amount: 500 },
     { documentName: "Certificate of Indigency", amount: 0 },
     { documentName: "Barangay Clearance", amount: 200 },
-    { documentName: "Certificate of Residency", amount: 150 },
+    { documentName: "Barangay Certificate (FTJS)", amount: 0 },
   ];
 
   for (const dt of documentTypes) {

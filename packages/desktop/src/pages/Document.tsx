@@ -4,11 +4,12 @@ import { useQuery } from '@tanstack/react-query';
 import ContentCard from '@/components/ui/ContentCard';
 import CustomDropdown from '@/components/ui/CustomDropdown';
 import ConfirmationModal from '@/components/ui/ConfirmationModal';
-import { getDocumentConfig } from '@/config/documents';
+import { getDocumentConfig, documentConfigs } from '@/config/documents';
 import { DocumentConfig } from '@/types';
 import { useSettings } from '@/hooks/useSettings';
 import { residentsService } from '@/services/residents';
 import { documentsService } from '@/services/documents';
+import type { FtjsStatus } from '@/services/documents';
 
 interface DocumentProps {
   setIsNavigationBlocked?: (blocked: boolean) => void;
@@ -42,6 +43,15 @@ const Document: React.FC<DocumentProps> = ({ setIsNavigationBlocked }) => {
     issueDate: string;
   } | null>(null);
   const [showPrefillBanner, setShowPrefillBanner] = useState(false);
+  const [ftjsStatus, setFtjsStatus] = useState<FtjsStatus | null>(null);
+  const [ftjsMode, setFtjsMode] = useState<'issue' | 'reprint' | null>(null);
+
+  const FTJS_TYPE_NAME = 'Barangay Certificate (FTJS)';
+
+  const selectableDocTypes = useMemo(() => {
+    // Only types with real templates; DB seed must include the same names.
+    return documentConfigs.map((c) => c.name);
+  }, []);
 
   const resetForm = () => {
     setSearchQuery('');
@@ -52,6 +62,10 @@ const Document: React.FC<DocumentProps> = ({ setIsNavigationBlocked }) => {
     setDocumentType('Barangay Business Clearance');
     setActiveConfig(null);
     setFormData({});
+    setFtjsStatus(null);
+    setFtjsMode(null);
+    setPreviousDocumentData(null);
+    setShowPrefillBanner(false);
   };
 
   // Block navigation when on Step 2
@@ -131,8 +145,49 @@ const Document: React.FC<DocumentProps> = ({ setIsNavigationBlocked }) => {
       municipality: settings.municipality,
       province: settings.province,
       punongBarangay: settings.punongBarangay,
+      secretary: settings.secretary || '',
+      witnessName: settings.secretary || '',
       documentTypeId: dbDocType.id,
     };
+
+    const now = new Date();
+    const formatDateLong = (d: Date) =>
+      d.toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        timeZone: 'UTC',
+      });
+
+    if (documentType === FTJS_TYPE_NAME) {
+      const until = new Date(now.getTime());
+      until.setFullYear(until.getFullYear() + 1);
+      initialData.validUntil = formatDateLong(until);
+      initialData.issueDateDisplay = formatDateLong(now);
+      initialData.issueDay = String(now.getUTCDate());
+      initialData.issueMonth = now.toLocaleDateString('en-US', {
+        month: 'long',
+        timeZone: 'UTC',
+      });
+      initialData.issueYear = String(now.getUTCFullYear());
+    }
+
+    if (documentType === 'Barangay Clearance' || documentType === 'Certificate of Indigency') {
+      initialData.day = initialData.day || String(now.getUTCDate());
+      initialData.month =
+        initialData.month ||
+        now.toLocaleDateString('en-US', { month: 'long', timeZone: 'UTC' });
+      initialData.year = initialData.year || String(now.getUTCFullYear());
+    }
+
+    if (documentType === 'Barangay Business Clearance') {
+      initialData.day = String(now.getUTCDate());
+      initialData.month = now.toLocaleDateString('en-US', {
+        month: 'long',
+        timeZone: 'UTC',
+      });
+      initialData.year = String(now.getUTCFullYear());
+    }
 
     config.fields.forEach(field => {
       if (field.residentAttribute) {
@@ -145,7 +200,7 @@ const Document: React.FC<DocumentProps> = ({ setIsNavigationBlocked }) => {
             initialData[field.key] = String(attr);
           }
         }
-      } else if (field.defaultValue) {
+      } else if (field.defaultValue && initialData[field.key] === undefined) {
         initialData[field.key] = field.defaultValue;
       }
     });
@@ -160,13 +215,63 @@ const Document: React.FC<DocumentProps> = ({ setIsNavigationBlocked }) => {
       // OR Number fetch failed - will show N/A
     }
 
+    // FTJS: once-only / reprint path
+    if (documentType === FTJS_TYPE_NAME) {
+      try {
+        const status = await documentsService.getFtjsStatus(selectedResidentId);
+        setFtjsStatus(status);
+        if (status.hasFtjs) {
+          if (!status.isValid) {
+            alert(
+              `FTJS already used (expired ${
+                status.validUntil
+                  ? new Date(status.validUntil).toLocaleDateString()
+                  : 'unknown'
+              }). New FTJS certificate not allowed.`
+            );
+            setFtjsStatus(null);
+            setFtjsMode(null);
+            return;
+          }
+          const reprintData: Record<string, any> = {
+            ...initialData,
+            ...(status.formData || {}),
+            selectedResident: getFullName(resident),
+            documentTypeId: dbDocType.id,
+            purpose: purpose === 'Other' ? otherPurpose : purpose,
+            barangayName: settings.barangayName,
+            municipality: settings.municipality,
+            province: settings.province,
+            punongBarangay: settings.punongBarangay,
+            secretary: settings.secretary || '',
+            orNumber: status.orNumber || '',
+            issueDateDisplay: status.issueDate
+              ? formatDateLong(new Date(status.issueDate))
+              : initialData.issueDateDisplay,
+          };
+          setFormData(reprintData);
+          setActiveConfig(config);
+          setFtjsMode('reprint');
+          setShowPrefillBanner(false);
+          setStep(2);
+          return;
+        }
+        setFtjsMode('issue');
+      } catch {
+        setFtjsMode('issue');
+      }
+    } else {
+      setFtjsStatus(null);
+      setFtjsMode(null);
+    }
+
     // Fetch previous document for pre-fill
     try {
       const lastDoc = await documentsService.getLastDocument(
         selectedResidentId,
         dbDocType.id
       );
-      if (lastDoc && lastDoc.formData) {
+      if (lastDoc && lastDoc.formData && documentType !== FTJS_TYPE_NAME) {
         setPreviousDocumentData(lastDoc);
         setShowPrefillBanner(true);
       } else {
@@ -214,6 +319,25 @@ const Document: React.FC<DocumentProps> = ({ setIsNavigationBlocked }) => {
   const handleConfirmIssue = async () => {
     if (!selectedResidentId || !activeConfig) return;
 
+    // Reprint path: do not create a new Document/Order
+    if (ftjsMode === 'reprint') {
+      setShowConfirmModal(false);
+      const sanitize = (s: string) =>
+        s
+          .replace(/[\\/:*?"<>|]+/g, "_")
+          .replace(/\s+/g, "_")
+          .replace(/_+/g, "_")
+          .replace(/^_+|_+$/g, "");
+      const residentName = formData.selectedResident || "Resident";
+      const docName = activeConfig?.name || documentType;
+      const dateStr = new Date().toISOString().slice(0, 10);
+      setIssuePdfName(
+        `${sanitize(residentName)}_${sanitize(docName)}_reprint_${dateStr}.pdf`
+      );
+      setShowIssueActions(true);
+      return;
+    }
+
     // Get documentTypeId from formData (database ID)
     const documentTypeId = formData.documentTypeId;
     if (!documentTypeId) {
@@ -230,6 +354,10 @@ const Document: React.FC<DocumentProps> = ({ setIsNavigationBlocked }) => {
         documentTypeId,
         purpose: purpose === 'Other' ? otherPurpose : purpose,
         formData,
+        validityPeriod:
+          documentType === FTJS_TYPE_NAME
+            ? formData.validUntil || undefined
+            : undefined,
       });
 
       // Update formData with OR Number
@@ -260,8 +388,13 @@ const Document: React.FC<DocumentProps> = ({ setIsNavigationBlocked }) => {
         setShowIssueActions(true);
         setIsIssuing(false);
       }, 150);
-    } catch (err) {
-      alert('Failed to create document. Please try again.');
+    } catch (err: any) {
+      const message =
+        err?.message ||
+        err?.error ||
+        (typeof err === 'string' ? err : '') ||
+        'Failed to create document. Please try again.';
+      alert(message);
       setShowConfirmModal(false);
       setIsIssuing(false);
     }
@@ -404,13 +537,7 @@ const Document: React.FC<DocumentProps> = ({ setIsNavigationBlocked }) => {
                     <CustomDropdown
                         value={documentType}
                         onChange={setDocumentType}
-                        options={[
-                        'Barangay Clearance',
-                        'Barangay Business Clearance',
-                        'Business Permit',
-                        'Certificate of Indigency',
-                        'Certificate of Residency'
-                        ]}
+                        options={selectableDocTypes}
                         placeholder="Select Document Type"
                     />
                     </div>
@@ -491,6 +618,38 @@ const Document: React.FC<DocumentProps> = ({ setIsNavigationBlocked }) => {
                         </div>
                     </div>
 
+                    {ftjsMode === 'reprint' && ftjsStatus?.hasFtjs && (
+                      <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-xl">
+                        <div className="flex items-center gap-3">
+                          <AlertTriangle size={20} className="text-amber-600" />
+                          <div>
+                            <p className="text-sm font-medium text-amber-900">
+                              FTJS already issued on{' '}
+                              {ftjsStatus.issueDate
+                                ? new Date(ftjsStatus.issueDate).toLocaleDateString('en-US', {
+                                    month: 'long',
+                                    day: 'numeric',
+                                    year: 'numeric',
+                                  })
+                                : 'unknown'}
+                              {' '}— valid until{' '}
+                              {ftjsStatus.validUntil
+                                ? new Date(ftjsStatus.validUntil).toLocaleDateString('en-US', {
+                                    month: 'long',
+                                    day: 'numeric',
+                                    year: 'numeric',
+                                  })
+                                : 'unknown'}
+                              .
+                            </p>
+                            <p className="text-xs text-amber-700 mt-1">
+                              You are reprinting the same certificate. No new availment; validity end date is unchanged.
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
                     {showPrefillBanner && previousDocumentData && (
                       <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-xl flex items-center justify-between">
                         <div className="flex items-center gap-3">
@@ -569,12 +728,12 @@ const Document: React.FC<DocumentProps> = ({ setIsNavigationBlocked }) => {
                 <ArrowLeft size={16} />
                 Back to Initialization
             </button>
-            <button 
+            <button
                 onClick={handlePrint}
                 className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-[13px] shadow-lg shadow-blue-200 transition-all active:scale-95"
             >
                 <Printer size={16} />
-                Issue & Print
+                {ftjsMode === 'reprint' ? 'Reprint Certificate' : 'Issue & Print'}
             </button>
         </div>
       )}
@@ -584,9 +743,19 @@ const Document: React.FC<DocumentProps> = ({ setIsNavigationBlocked }) => {
         isOpen={showConfirmModal}
         onClose={handleCancelIssue}
         onConfirm={handleConfirmIssue}
-        title="Issue Document"
-        message={`Are you sure you want to issue this ${documentType}? This action cannot be undone.`}
-        confirmText={isIssuing ? "Issuing..." : "Issue & Print"}
+        title={ftjsMode === 'reprint' ? 'Reprint FTJS Certificate' : 'Issue Document'}
+        message={
+          ftjsMode === 'reprint'
+            ? `Reprint ${documentType} using the existing issuance record? This does not create a new availment.`
+            : `Are you sure you want to issue this ${documentType}? This action cannot be undone.`
+        }
+        confirmText={
+          isIssuing
+            ? 'Issuing...'
+            : ftjsMode === 'reprint'
+              ? 'Reprint Certificate'
+              : 'Issue & Print'
+        }
         cancelText="Cancel"
         isLoading={isIssuing}
       />

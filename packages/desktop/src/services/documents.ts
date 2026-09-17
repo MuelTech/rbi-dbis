@@ -35,6 +35,17 @@ export interface CreateDocumentPayload {
   formData?: Record<string, any>;
 }
 
+export interface FtjsStatus {
+  hasFtjs: boolean;
+  documentId?: string;
+  issueDate?: string;
+  validUntil?: string;
+  isValid?: boolean;
+  orNumber?: string | null;
+  formData?: Record<string, any> | null;
+  purpose?: string | null;
+}
+
 export const documentsService = {
   getTypes: () => api.get<DocumentTypeRecord[]>("/documents/types"),
   getAll: () => api.get<DocumentRecord[]>("/documents"),
@@ -55,6 +66,11 @@ export const documentsService = {
       documentTypeId,
     });
     return api.get(`/documents/last?${params.toString()}`);
+  },
+  getFtjsStatus: async (residentId: string): Promise<FtjsStatus> => {
+    return api.get(
+      `/documents/ftjs-status?residentId=${encodeURIComponent(residentId)}`
+    );
   },
   getNextOrNumber: (): Promise<{ orNumber: string }> => {
     return api.get("/documents/next-or-number");

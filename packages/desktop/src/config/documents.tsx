@@ -1,8 +1,9 @@
 import React from 'react';
 import { DocumentConfig } from '@/types';
 import BusinessClearanceTemplate from '@/components/templates/BusinessClearanceTemplate';
-import BusinessPermitTemplate from '@/components/templates/BusinessPermitTemplate';
 import IndigencyTemplate from '@/components/templates/IndigencyTemplate';
+import FtjsCertificateTemplate from '@/components/templates/FtjsCertificateTemplate';
+import BarangayClearanceTemplate from '@/components/templates/BarangayClearanceTemplate';
 
 export const documentConfigs: DocumentConfig[] = [
   {
@@ -50,62 +51,107 @@ export const documentConfigs: DocumentConfig[] = [
     ]
   },
   {
-    id: 'business-permit',
-    name: 'Business Permit',
-    Template: BusinessPermitTemplate,
+    id: 'barangay-clearance',
+    name: 'Barangay Clearance',
+    Template: BarangayClearanceTemplate,
     fields: [
       {
-        key: 'businessType',
-        label: 'Business Type',
+        key: 'address',
+        label: 'Residence / Postal Address',
         type: 'text',
         source: 'input',
-        placeholder: 'e.g. House Space Rental',
-        required: true,
-        width: 'full'
-      },
-      {
-        key: 'businessAddress',
-        label: 'Business Address',
-        type: 'text',
-        source: 'input',
-        placeholder: 'Complete business address',
         residentAttribute: 'address',
         required: true,
         width: 'full'
       },
       {
-        key: 'tradeName',
-        label: 'Trade Name',
+        key: 'purpose',
+        label: 'Purpose',
         type: 'text',
         source: 'input',
-        placeholder: 'e.g. NOEH House Space Rental',
+        placeholder: 'e.g. LOCAL EMPLOYMENT',
         required: true,
         width: 'full'
+      },
+      {
+        key: 'day',
+        label: 'Day',
+        type: 'text',
+        source: 'input',
+        width: 'half'
+      },
+      {
+        key: 'month',
+        label: 'Month',
+        type: 'text',
+        source: 'input',
+        width: 'half'
+      },
+      {
+        key: 'year',
+        label: 'Year',
+        type: 'text',
+        source: 'input',
+        defaultValue: '2026',
+        width: 'half'
+      }
+    ]
+  },
+  {
+    id: 'barangay-certificate-ftjs',
+    name: 'Barangay Certificate (FTJS)',
+    Template: FtjsCertificateTemplate,
+    fields: [
+      {
+        key: 'age',
+        label: 'Age',
+        type: 'text',
+        source: 'input',
+        required: true,
+        width: 'half'
+      },
+      {
+        key: 'civilStatus',
+        label: 'Civil Status',
+        type: 'select',
+        source: 'input',
+        options: ['Single', 'Married', 'Widowed', 'Separated', 'Annulled'],
+        defaultValue: 'Single',
+        width: 'half'
+      },
+      {
+        key: 'address',
+        label: 'Resident Address',
+        type: 'text',
+        source: 'input',
+        residentAttribute: 'address',
+        required: true,
+        width: 'full'
+      },
+      {
+        key: 'yearsOfResidency',
+        label: 'Years of Residency',
+        type: 'text',
+        source: 'input',
+        required: true,
+        width: 'half'
       },
       {
         key: 'validUntil',
         label: 'Valid Until',
         type: 'text',
         source: 'input',
-        defaultValue: 'December 31, 2026',
-        width: 'full'
+        placeholder: 'e.g. January 28, 2027',
+        width: 'half'
       },
       {
-        key: 'busNo',
-        label: 'Business Number',
+        key: 'witnessName',
+        label: 'Barangay Secretary (Witness)',
         type: 'text',
         source: 'input',
-        placeholder: 'e.g. 2026-418-0006',
         width: 'full'
       }
     ]
-  },
-  // Placeholder for other documents
-  {
-    id: 'barangay-clearance',
-    name: 'Barangay Clearance',
-    Template: ({ data }) => <div>Template for Barangay Clearance (Coming Soon)</div>,
-    fields: []
   },
   {
     id: 'certificate-of-indigency',
@@ -155,12 +201,6 @@ export const documentConfigs: DocumentConfig[] = [
         width: 'half'
       }
     ]
-  },
-  {
-    id: 'certificate-of-residency',
-    name: 'Certificate of Residency',
-    Template: ({ data }) => <div>Template for Certificate of Residency (Coming Soon)</div>,
-    fields: []
   }
 ];
 
