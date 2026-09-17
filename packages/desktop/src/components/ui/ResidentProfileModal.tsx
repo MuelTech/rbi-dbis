@@ -321,6 +321,11 @@ const ResidentProfileModal: React.FC<ResidentProfileModalProps> = ({ isOpen, onC
                                         <div className="flex gap-2">
                                             <span className="px-2.5 py-1 bg-blue-50 text-blue-600 text-[11px] font-bold uppercase tracking-wide rounded-md">Resident</span>
                                             <span className="px-2.5 py-1 bg-gray-100 text-gray-600 text-[11px] font-bold uppercase tracking-wide rounded-md">{formData.age} Years Old</span>
+                                            {detail.registeredAt && (
+                                                <span className="px-2.5 py-1 bg-gray-100 text-gray-600 text-[11px] font-bold uppercase tracking-wide rounded-md">
+                                                    Registered: {new Date(detail.registeredAt).toLocaleString('en-US', { year: 'numeric', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
+                                                </span>
+                                            )}
                                         </div>
                                     </div>
                                 </div>

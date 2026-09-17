@@ -25,6 +25,18 @@ function computeAge(dateOfBirth: Date | null): number {
   return age;
 }
 
+/**
+ * Parses an optional `registered_at` cell. Returns undefined when missing or
+ * invalid so the database default (now) applies.
+ */
+function parseRegisteredAt(value: unknown): Date | undefined {
+  if (value === undefined || value === null || String(value).trim() === "") {
+    return undefined;
+  }
+  const parsed = new Date(String(value));
+  return isNaN(parsed.getTime()) ? undefined : parsed;
+}
+
 export async function getResidents(
   req: Request,
   res: Response,
@@ -120,6 +132,7 @@ export async function getResidents(
       occupation: r.occupationType,
       profileImage: r.profileImage,
       age: computeAge(r.dateOfBirth),
+      registeredAt: r.registeredAt,
       createdAt: r.createdAt,
       updatedAt: r.updatedAt,
     }));
@@ -260,6 +273,7 @@ async function buildResidentDetail(id: string) {
     occupation: resident.occupationType,
     profileImage: resident.profileImage,
     age: computeAge(resident.dateOfBirth),
+    registeredAt: resident.registeredAt,
     createdAt: resident.createdAt,
     updatedAt: resident.updatedAt,
     familyHead: familyHeadLabel ? { name: familyHeadLabel } : null,
@@ -448,6 +462,7 @@ export async function batchImportResidents(
             occupationType: head.occupation || null,
             contactNumber: head.contact_number || null,
             studentType: head.is_student === "Yes" ? (head.education_level || "Student") : null,
+            registeredAt: parseRegisteredAt(head.registered_at),
           };
 
           const existingHead = await tx.resident.findFirst({
@@ -524,6 +539,7 @@ export async function batchImportResidents(
               occupationType: m.occupation || null,
               contactNumber: m.contact_number || null,
               studentType: m.is_student === "Yes" ? (m.education_level || "Student") : null,
+              registeredAt: parseRegisteredAt(m.registered_at ?? head.registered_at),
             };
 
             const existingMember = await tx.resident.findFirst({

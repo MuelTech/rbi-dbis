@@ -87,6 +87,7 @@ const TEMPLATE_COLUMNS = [
   'is_pwd',
   'is_solo_parent',
   'is_owner',
+  'registered_at',
 ];
 
 const REQUIRED_FIELDS = ['family_id', 'relationship', 'last_name', 'first_name', 'date_of_birth', 'sex'];
