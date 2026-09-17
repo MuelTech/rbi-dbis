@@ -1,9 +1,10 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useMemo } from 'react';
 import { Upload, Download, FileText, Check, X, AlertTriangle, Users, ChevronLeft } from 'lucide-react';
 import * as XLSX from 'xlsx';
+import { useQuery } from '@tanstack/react-query';
 import Modal from '@/components/ui/Modal';
-import { Resident } from '@/types';
 import { residentsService } from '@/services/residents';
+import { chunkFamilies, mergeChunkResults, type BatchImportResult } from '@/utils/batchImport';
 
 // --- Types ---
 
@@ -23,6 +24,21 @@ interface ImportResult {
   errors: number;
 }
 
+interface ResidentLookup {
+  firstName: string;
+  lastName: string;
+  dateOfBirth: string | null;
+}
+
+interface ImportProgress {
+  chunk: number;
+  totalChunks: number;
+  created: number;
+  updated: number;
+  skipped: number;
+  errors: number;
+}
+
 interface ImportFamily {
   family_id: string;
   household: Record<string, string>;
@@ -37,7 +53,6 @@ interface BatchImportModalProps {
   isOpen: boolean;
   onClose: () => void;
   onImportComplete: (count: number) => void;
-  existingResidents: Resident[];
 }
 
 // --- Constants ---
@@ -79,7 +94,10 @@ const TEMPLATE_COLUMNS = [
 
 const REQUIRED_FIELDS = ['family_id', 'relationship', 'last_name', 'first_name', 'date_of_birth', 'sex'];
 
-const MAX_ROWS = 500;
+const MAX_ROWS = 5000;
+const LARGE_IMPORT_WARNING = 3000;
+const CHUNK_SIZE = 100;
+const PREVIEW_PAGE_SIZE = 20;
 
 // --- Validation ---
 
@@ -243,7 +261,6 @@ const BatchImportModal: React.FC<BatchImportModalProps> = ({
   isOpen,
   onClose,
   onImportComplete,
-  existingResidents,
 }) => {
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [fileName, setFileName] = useState('');
@@ -253,10 +270,20 @@ const BatchImportModal: React.FC<BatchImportModalProps> = ({
   const [importResult, setImportResult] = useState<ImportResult>({ success: 0, updated: 0, duplicates: 0, errors: 0 });
   const [fileError, setFileError] = useState('');
   const [isDragging, setIsDragging] = useState(false);
-  const existingResidentsRef = useRef(existingResidents);
-  existingResidentsRef.current = existingResidents;
+  const [progress, setProgress] = useState<ImportProgress | null>(null);
+  const [errorMessages, setErrorMessages] = useState<string[]>([]);
+  const [failedFamilies, setFailedFamilies] = useState<ImportFamily[]>([]);
+  const [previewPage, setPreviewPage] = useState(1);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const { data: lookupData } = useQuery({
+    queryKey: ['residents-lookup'],
+    queryFn: () => residentsService.lookup(),
+    enabled: isOpen,
+  });
+  const lookupRef = useRef<ResidentLookup[]>([]);
+  lookupRef.current = lookupData ?? [];
 
   const successCount = parsedRows.filter((r) => r.status === 'success').length;
   const duplicateCount = parsedRows.filter((r) => r.status === 'duplicate').length;
@@ -264,7 +291,36 @@ const BatchImportModal: React.FC<BatchImportModalProps> = ({
   const importableCount = successCount + (duplicateAction === 'overwrite' ? duplicateCount : 0);
   const totalRows = parsedRows.length;
 
-  const successFamilies = parseGroupedRows(parsedRows.map((r) => r.data));
+  const familySummaries = useMemo(() => {
+    const byFamily = new Map<string, ImportRow[]>();
+    for (const row of parsedRows) {
+      const id = row.data.family_id;
+      if (!id) continue;
+      const list = byFamily.get(id);
+      if (list) list.push(row);
+      else byFamily.set(id, [row]);
+    }
+    return Array.from(byFamily.entries()).map(([familyId, rows]) => {
+      const head = rows.find((r) => r.data.relationship?.toLowerCase() === 'head') ?? rows[0];
+      const hasError = rows.some((r) => r.status === 'error');
+      const allDuplicate = rows.every((r) => r.status === 'duplicate');
+      const firstError = rows.find((r) => r.status === 'error');
+      const status: ImportRowStatus = hasError ? 'error' : allDuplicate ? 'duplicate' : 'success';
+      return {
+        familyId,
+        headName: `${head?.data.first_name ?? ''} ${head?.data.last_name ?? ''}`.trim(),
+        memberCount: rows.filter((r) => r.data.relationship?.toLowerCase() !== 'head').length,
+        status,
+        message: hasError && firstError ? firstError.message : allDuplicate ? 'All residents already exist' : '',
+      };
+    });
+  }, [parsedRows]);
+
+  const previewTotalPages = Math.max(1, Math.ceil(familySummaries.length / PREVIEW_PAGE_SIZE));
+  const previewRows = familySummaries.slice(
+    (previewPage - 1) * PREVIEW_PAGE_SIZE,
+    previewPage * PREVIEW_PAGE_SIZE
+  );
 
   const resetState = useCallback(() => {
     setStep(1);
@@ -275,6 +331,10 @@ const BatchImportModal: React.FC<BatchImportModalProps> = ({
     setImportResult({ success: 0, updated: 0, duplicates: 0, errors: 0 });
     setFileError('');
     setIsDragging(false);
+    setProgress(null);
+    setErrorMessages([]);
+    setFailedFamilies([]);
+    setPreviewPage(1);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -286,7 +346,7 @@ const BatchImportModal: React.FC<BatchImportModalProps> = ({
   }, [resetState, onClose]);
 
   const checkDuplicate = (row: Record<string, string>): boolean => {
-    return existingResidentsRef.current.some(
+    return lookupRef.current.some(
       (r) =>
         r.lastName?.toLowerCase().trim() === row.last_name?.toLowerCase().trim() &&
         r.firstName?.toLowerCase().trim() === row.first_name?.toLowerCase().trim() &&
@@ -363,6 +423,7 @@ const BatchImportModal: React.FC<BatchImportModalProps> = ({
           });
 
           setParsedRows(importRows);
+          setPreviewPage(1);
           setStep(2);
         } catch {
           setFileError('Failed to parse file. Please ensure it is a valid CSV or Excel file.');
@@ -409,28 +470,102 @@ const BatchImportModal: React.FC<BatchImportModalProps> = ({
     XLSX.writeFile(wb, 'resident_import_template.xlsx');
   }, []);
 
+  const runChunkedImport = useCallback(
+    async (families: ImportFamily[]) => {
+      const chunks = chunkFamilies(families, CHUNK_SIZE);
+      const results: BatchImportResult[] = [];
+      const failed: ImportFamily[] = [];
+
+      for (let i = 0; i < chunks.length; i++) {
+        try {
+          const result = await residentsService.batchImport({
+            families: chunks[i],
+            duplicateAction,
+          });
+          results.push(result);
+        } catch (err: any) {
+          failed.push(...chunks[i]);
+          results.push({
+            created: 0,
+            updated: 0,
+            skipped: 0,
+            families: chunks[i].length,
+            errors: [
+              `Chunk ${i + 1}/${chunks.length}: ${err?.message ?? 'Import request failed'}`,
+            ],
+          });
+        }
+        const merged = mergeChunkResults(results);
+        setProgress({
+          chunk: i + 1,
+          totalChunks: chunks.length,
+          created: merged.created,
+          updated: merged.updated,
+          skipped: merged.skipped,
+          errors: merged.errors.length,
+        });
+      }
+
+      return { merged: mergeChunkResults(results), failed };
+    },
+    [duplicateAction]
+  );
+
   const handleImport = useCallback(async () => {
     setImporting(true);
+    setErrorMessages([]);
+    setFailedFamilies([]);
     try {
-      const importableRows = parsedRows.filter(r => 
-        r.status === 'success' || (r.status === 'duplicate' && duplicateAction === 'overwrite')
-      ).map(r => r.data);
+      const importableRows = parsedRows
+        .filter(
+          (r) =>
+            r.status === 'success' ||
+            (r.status === 'duplicate' && duplicateAction === 'overwrite')
+        )
+        .map((r) => r.data);
       const families = parseGroupedRows(importableRows);
-      const result = await residentsService.batchImport({ families, duplicateAction });
+      const { merged, failed } = await runChunkedImport(families);
+
       setImportResult({
-        success: result.created,
-        updated: result.updated,
-        duplicates: result.skipped,
-        errors: result.errors.length,
+        success: merged.created,
+        updated: merged.updated,
+        duplicates: merged.skipped,
+        errors: merged.errors.length,
       });
+      setErrorMessages(merged.errors);
+      setFailedFamilies(failed);
       setImporting(false);
       setStep(3);
-    } catch (err: any) {
+    } catch {
       setImportResult({ success: 0, updated: 0, duplicates: 0, errors: 1 });
+      setErrorMessages(['Import failed unexpectedly']);
       setImporting(false);
       setStep(3);
     }
-  }, [parsedRows, duplicateAction]);
+  }, [parsedRows, duplicateAction, runChunkedImport]);
+
+  const handleRetryFailed = useCallback(async () => {
+    if (failedFamilies.length === 0 || importing) return;
+    setImporting(true);
+    const { merged, failed } = await runChunkedImport(failedFamilies);
+    setImportResult((prev) => ({
+      success: prev.success + merged.created,
+      updated: prev.updated + merged.updated,
+      duplicates: prev.duplicates + merged.skipped,
+      errors: merged.errors.length,
+    }));
+    setErrorMessages(merged.errors);
+    setFailedFamilies(failed);
+    setImporting(false);
+  }, [failedFamilies, importing, runChunkedImport]);
+
+  const handleDownloadErrorReport = useCallback(() => {
+    if (errorMessages.length === 0) return;
+    const ws = XLSX.utils.aoa_to_sheet([['Error'], ...errorMessages.map((m) => [m])]);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Errors');
+    XLSX.writeFile(wb, `batch_import_errors_${Date.now()}.xlsx`);
+  }, [errorMessages]);
 
   const handleDone = useCallback(() => {
     const count = importResult.success;
@@ -502,6 +637,42 @@ const BatchImportModal: React.FC<BatchImportModalProps> = ({
         </div>
       </div>
 
+      {totalRows > LARGE_IMPORT_WARNING && (
+        <div className="flex items-center gap-2 bg-[#FFFBEB] border border-orange-200 rounded-2xl px-4 py-3 text-[13px] font-medium text-[#9A3412]">
+          <AlertTriangle className="w-4 h-4 shrink-0" />
+          Large import: {totalRows} rows. It will be sent in{' '}
+          {Math.ceil(totalRows / CHUNK_SIZE)} chunks — keep this window open until it
+          finishes.
+        </div>
+      )}
+
+      {importing && progress && (
+        <div className="bg-white border border-gray-100 rounded-2xl p-4">
+          <div className="flex items-center justify-between text-[13px] font-medium text-gray-600 mb-2">
+            <span>
+              Importing chunk {progress.chunk} of {progress.totalChunks}…
+            </span>
+            <span>
+              {Math.round((progress.chunk / Math.max(1, progress.totalChunks)) * 100)}%
+            </span>
+          </div>
+          <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
+            <div
+              className="h-2 bg-blue-600 rounded-full transition-all duration-200"
+              style={{
+                width: `${(progress.chunk / Math.max(1, progress.totalChunks)) * 100}%`,
+              }}
+            />
+          </div>
+          <div className="flex gap-4 mt-2 text-[12px] text-gray-500 font-medium">
+            <span>{progress.created} created</span>
+            <span>{progress.updated} updated</span>
+            <span>{progress.skipped} skipped</span>
+            <span>{progress.errors} error(s)</span>
+          </div>
+        </div>
+      )}
+
       {duplicateCount > 0 && (
         <div className="bg-[#FFFBEB] border border-orange-200 rounded-2xl p-4 flex items-center gap-4">
           <span className="text-[13px] font-bold text-[#9A3412]">Duplicate handling:</span>
@@ -569,36 +740,50 @@ const BatchImportModal: React.FC<BatchImportModalProps> = ({
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-50">
-              {successFamilies.map((family) => {
-                const headRow = parsedRows.find(
-                  (r) => r.data.family_id === family.family_id && r.data.relationship?.toLowerCase() === 'head'
-                );
-                const allRowsForFamily = parsedRows.filter((r) => r.data.family_id === family.family_id);
-                const hasError = allRowsForFamily.some((r) => r.status === 'error');
-                const allDuplicate = allRowsForFamily.every((r) => r.status === 'duplicate');
-                const firstError = allRowsForFamily.find((r) => r.status === 'error');
-                const familyStatus: ImportRowStatus = hasError ? 'error' : allDuplicate ? 'duplicate' : 'success';
-                const familyMessage = hasError && firstError ? firstError.message : allDuplicate ? 'All residents already exist' : '';
-
-                return (
-                  <tr key={family.family_id} className="hover:bg-gray-50/50 transition-colors">
-                    <td className="px-4 py-3 text-[14px] font-bold text-gray-900">{family.family_id}</td>
-                    <td className="px-4 py-3 text-[14px] text-gray-700 font-medium">
-                      {family.head.first_name} {family.head.last_name}
-                    </td>
-                    <td className="px-4 py-3 text-[14px] text-gray-700 font-medium">{family.members.length}</td>
-                    <td className="px-4 py-3">
-                      <StatusBadge status={familyStatus} />
-                    </td>
-                    <td className="px-4 py-3 text-[12px] text-gray-500 font-medium max-w-[200px] truncate">
-                      {familyMessage}
-                    </td>
-                  </tr>
-                );
-              })}
+              {previewRows.map((family) => (
+                <tr key={family.familyId} className="hover:bg-gray-50/50 transition-colors">
+                  <td className="px-4 py-3 text-[14px] font-bold text-gray-900">{family.familyId}</td>
+                  <td className="px-4 py-3 text-[14px] text-gray-700 font-medium">
+                    {family.headName}
+                  </td>
+                  <td className="px-4 py-3 text-[14px] text-gray-700 font-medium">{family.memberCount}</td>
+                  <td className="px-4 py-3">
+                    <StatusBadge status={family.status} />
+                  </td>
+                  <td className="px-4 py-3 text-[12px] text-gray-500 font-medium max-w-[200px] truncate">
+                    {family.message}
+                  </td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>
+        {previewTotalPages > 1 && (
+          <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100 bg-gray-50/50">
+            <span className="text-[12px] font-medium text-gray-500">
+              Showing {previewRows.length} of {familySummaries.length} families
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setPreviewPage((p) => Math.max(1, p - 1))}
+                disabled={previewPage === 1}
+                className="px-3 py-1.5 text-[12px] font-bold text-gray-600 rounded-lg border border-gray-200 hover:bg-white disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                Prev
+              </button>
+              <span className="text-[12px] font-bold text-gray-600">
+                {previewPage} / {previewTotalPages}
+              </span>
+              <button
+                onClick={() => setPreviewPage((p) => Math.min(previewTotalPages, p + 1))}
+                disabled={previewPage === previewTotalPages}
+                className="px-3 py-1.5 text-[12px] font-bold text-gray-600 rounded-lg border border-gray-200 hover:bg-white disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -628,6 +813,27 @@ const BatchImportModal: React.FC<BatchImportModalProps> = ({
       <p className="text-[13px] text-gray-500 font-medium text-center mt-4">
         {fileName} — {totalRows} rows processed
       </p>
+
+      {importResult.errors > 0 && (
+        <div className="flex flex-wrap items-center justify-center gap-3 mt-4">
+          <button
+            onClick={handleDownloadErrorReport}
+            className="flex items-center gap-2 px-4 py-2.5 bg-white border border-gray-200 text-gray-700 rounded-xl text-[13px] font-bold hover:bg-gray-50 transition-colors"
+          >
+            <Download className="w-4 h-4" />
+            Download error report
+          </button>
+          {failedFamilies.length > 0 && (
+            <button
+              onClick={handleRetryFailed}
+              disabled={importing}
+              className="flex items-center gap-2 px-4 py-2.5 bg-[#2563EB] hover:bg-blue-700 text-white rounded-xl text-[13px] font-bold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {importing ? 'Retrying...' : `Retry failed (${failedFamilies.length})`}
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 
@@ -657,7 +863,8 @@ const BatchImportModal: React.FC<BatchImportModalProps> = ({
         {(step === 1 || step === 2) && (
           <button
             onClick={handleClose}
-            className="px-5 py-2.5 bg-white border border-gray-200 text-gray-700 rounded-xl text-[13px] font-bold hover:bg-gray-50 transition-colors"
+            disabled={importing}
+            className="px-5 py-2.5 bg-white border border-gray-200 text-gray-700 rounded-xl text-[13px] font-bold hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Cancel
           </button>
