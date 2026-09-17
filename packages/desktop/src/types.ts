@@ -64,6 +64,7 @@ export interface Resident {
   occupation?: string; // occupation_type
   record?: boolean; // record (true = No bad record)
   age: number;
+  registeredAt?: string; // date registered
 
   // New snake_case attributes for Document system compatibility
   resident_id?: string;

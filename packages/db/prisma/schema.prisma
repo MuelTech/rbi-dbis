@@ -144,6 +144,7 @@ model Resident {
   contactNumber  String?        @map("contact_number") @db.VarChar(20)
   occupationType String?        @map("occupation_type") @db.VarChar(50)
   profileImage   String?        @map("profile_image") @db.VarChar(255)
+  registeredAt   DateTime       @default(now()) @map("registered_at")
   createdAt      DateTime       @default(now()) @map("created_at")
   updatedAt      DateTime       @updatedAt @map("updated_at")
 

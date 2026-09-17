@@ -182,6 +182,11 @@ const RESTORE_STEPS: RestoreStep[] = [
             contactNumber: r.contactNumber,
             occupationType: r.occupationType,
             profileImage: r.profileImage,
+            registeredAt: r.registeredAt
+              ? new Date(r.registeredAt)
+              : r.createdAt
+                ? new Date(r.createdAt)
+                : new Date(),
             recordId: r.recordId,
           })),
         });
