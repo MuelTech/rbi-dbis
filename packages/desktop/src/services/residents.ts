@@ -30,7 +30,6 @@ export const residentsService = {
     );
   },
   getById: (id: string) => api.get<ResidentDetail>(`/residents/${id}`),
-  create: (data: Partial<Resident>) => api.post<Resident>("/residents", data),
   update: (id: string, data: Record<string, unknown>) =>
     api.put<ResidentDetail>(`/residents/${id}`, data),
   delete: (id: string) => api.delete(`/residents/${id}`),
