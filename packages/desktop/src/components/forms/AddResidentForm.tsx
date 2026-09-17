@@ -3,6 +3,7 @@ import { Home, User, Users, Hash, MapPin, PawPrint, Car, ChevronLeft, ChevronRig
 import ConfirmationModal from '@/components/ui/ConfirmationModal';
 import { residentsService } from '@/services/residents';
 import type { RegistrationPayload } from '@/types';
+import { EDUCATION_LEVELS, validateResidentFields } from '@/utils/residentValidation';
 
 interface AddResidentFormProps {
     onCancel: () => void;
@@ -59,12 +60,10 @@ const OCCUPATION_OPTIONS = [
     { value: 'Student', label: 'Student' },
 ];
 
-const EDUCATION_LEVEL_OPTIONS = [
-    { value: 'Elementary', label: 'Elementary' },
-    { value: 'High School', label: 'High School' },
-    { value: 'College', label: 'College' },
-    { value: 'Vocational', label: 'Vocational' },
-];
+const EDUCATION_LEVEL_OPTIONS = EDUCATION_LEVELS.map((value) => ({
+    value,
+    label: value,
+}));
 
 const RELATIONSHIP_OPTIONS = [
     { value: 'Spouse', label: 'Spouse' },
@@ -389,6 +388,32 @@ const AddResidentForm: React.FC<AddResidentFormProps> = ({ onCancel, setIsNaviga
             if (formData.headIsStudent === 'Yes') {
                 if (!formData.headEducationLevel) newErrors.headEducationLevel = 'Education Level is required';
             }
+
+            const headFieldMap: Record<string, string> = {
+                firstName: 'headFirstName', middleName: 'headMiddleName', lastName: 'headLastName',
+                suffix: 'headSuffix', placeOfBirth: 'headBirthPlace', dateOfBirth: 'headBirthDate',
+                sex: 'headSex', civilStatus: 'headCivilStatus', occupation: 'headOccupation',
+                educationLevel: 'headEducationLevel', isVoter: 'headIsVoter', contactNumber: 'headContactNumber',
+            };
+            const headFieldErrors = validateResidentFields({
+                firstName: formData.headFirstName,
+                middleName: formData.headMiddleName,
+                lastName: formData.headLastName,
+                suffix: formData.headSuffix,
+                placeOfBirth: formData.headBirthPlace,
+                dateOfBirth: formData.headBirthDate,
+                sex: formData.headSex,
+                civilStatus: formData.headCivilStatus,
+                occupation: formData.headOccupation,
+                educationLevel: formData.headEducationLevel,
+                isStudent: formData.headIsStudent === 'Yes',
+                isVoter: formData.headIsVoter,
+                contactNumber: formData.headContactNumber,
+            }, { requireCore: true });
+            for (const [field, message] of Object.entries(headFieldErrors)) {
+                const key = headFieldMap[field];
+                if (key && !newErrors[key]) newErrors[key] = message;
+            }
         } else if (step === 3) {
             familyMembers.forEach((member) => {
                 if (!member.relationship) newErrors[`member_${member.id}_relationship`] = 'Relationship is required';
@@ -418,6 +443,35 @@ const AddResidentForm: React.FC<AddResidentFormProps> = ({ onCancel, setIsNaviga
 
                 if (member.isStudent === 'Yes') {
                     if (!member.educationLevel) newErrors[`member_${member.id}_educationLevel`] = 'Education Level is required';
+                }
+
+                const memberFieldMap: Record<string, string> = {
+                    firstName: 'firstName', middleName: 'middleName', lastName: 'lastName',
+                    suffix: 'suffix', placeOfBirth: 'birthPlace', dateOfBirth: 'birthDate',
+                    sex: 'sex', civilStatus: 'civilStatus', occupation: 'occupation',
+                    educationLevel: 'educationLevel', isVoter: 'isVoter', contactNumber: 'contactNumber',
+                };
+                const memberFieldErrors = validateResidentFields({
+                    firstName: member.firstName,
+                    middleName: member.middleName,
+                    lastName: member.lastName,
+                    suffix: member.suffix,
+                    placeOfBirth: member.birthPlace,
+                    dateOfBirth: member.birthDate,
+                    sex: member.sex,
+                    civilStatus: member.civilStatus,
+                    occupation: member.occupation,
+                    educationLevel: member.educationLevel,
+                    isStudent: member.isStudent === 'Yes',
+                    isVoter: member.isVoter,
+                    contactNumber: member.contactNumber,
+                }, { requireCore: true });
+                for (const [field, message] of Object.entries(memberFieldErrors)) {
+                    const key = memberFieldMap[field];
+                    if (key) {
+                        const errKey = `member_${member.id}_${key}`;
+                        if (!newErrors[errKey]) newErrors[errKey] = message;
+                    }
                 }
             });
         }

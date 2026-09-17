@@ -5,6 +5,7 @@ import Modal from '@/components/ui/Modal';
 import { Resident, ResidentDetail } from '@/types';
 import { useAuth } from '@/context/AuthContext';
 import { residentsService } from '@/services/residents';
+import { EDUCATION_LEVELS, OCCUPATIONS, validateResidentFields } from '@/utils/residentValidation';
 
 interface CustomDropdownProps {
     value: string;
@@ -120,6 +121,7 @@ const ResidentProfileModal: React.FC<ResidentProfileModalProps> = ({ isOpen, onC
     const [isEditing, setIsEditing] = useState(false);
     const [formData, setFormData] = useState<ReturnType<typeof buildFormData> | null>(null);
     const [isStatusDropdownOpen, setIsStatusDropdownOpen] = useState(false);
+    const [saveError, setSaveError] = useState<string | null>(null);
 
     const { data: detail, isLoading: loading, error: queryError } = useQuery({
         queryKey: ['resident', resident?.id],
@@ -169,6 +171,30 @@ const ResidentProfileModal: React.FC<ResidentProfileModalProps> = ({ isOpen, onC
 
     const handleSave = async () => {
         if (!formData || !detail) return;
+        const educationLevel =
+            formData.studentStatus && formData.studentStatus !== 'Not Student'
+                ? formData.studentStatus
+                : '';
+        const fieldErrors = validateResidentFields({
+            firstName: formData.firstName,
+            middleName: formData.middleName,
+            lastName: formData.lastName,
+            suffix: formData.suffix,
+            placeOfBirth: formData.placeOfBirth,
+            dateOfBirth: formData.dateOfBirth,
+            sex: formData.sex,
+            civilStatus: formData.civilStatus,
+            occupation: formData.occupation,
+            educationLevel,
+            isStudent: Boolean(educationLevel),
+            isVoter: formData.voter,
+            contactNumber: formData.contactNumber,
+        }, { requireCore: true });
+        if (Object.keys(fieldErrors).length > 0) {
+            setSaveError(Object.values(fieldErrors).join('; '));
+            return;
+        }
+        setSaveError(null);
         const payload: Record<string, unknown> = {
             firstName: formData.firstName,
             lastName: formData.lastName,
@@ -180,7 +206,7 @@ const ResidentProfileModal: React.FC<ResidentProfileModalProps> = ({ isOpen, onC
             sex: formData.sex,
             contactNumber: formData.contactNumber || null,
             occupation: formData.occupation || null,
-            studentType: formData.studentStatus || null,
+            studentType: educationLevel || null,
             isVoter: formData.voter,
             isPwd: formData.pwd,
             isSoloParent: formData.soloParent,
@@ -247,6 +273,11 @@ const ResidentProfileModal: React.FC<ResidentProfileModalProps> = ({ isOpen, onC
                     <div className="flex-1 overflow-y-auto p-6 custom-scrollbar">
                         {activeTab === 'profile' && (
                             <div className="space-y-8">
+                                {saveError && (
+                                    <div className="text-[13px] font-medium text-red-600 bg-red-50 border border-red-100 rounded-xl px-4 py-3">
+                                        {saveError}
+                                    </div>
+                                )}
                                 {/* Profile Header Card */}
                                 <div className="bg-white border border-gray-100 rounded-2xl p-6 shadow-sm flex flex-col md:flex-row gap-6 items-start">
                                     <div className="relative shrink-0">
@@ -488,7 +519,7 @@ const ResidentProfileModal: React.FC<ResidentProfileModalProps> = ({ isOpen, onC
                                             <CustomDropdown
                                                 value={formData.occupation}
                                                 onChange={(value) => setFormData((prev) => prev ? ({ ...prev, occupation: value }) : prev)}
-                                                options={['Teacher', 'Engineer', 'Nurse', 'Doctor', 'Driver', 'Vendor', 'Unemployed', 'Others']}
+                                                options={[...OCCUPATIONS]}
                                                 disabled={!isEditing}
                                                 placeholder="Select Occupation"
                                             />
@@ -498,7 +529,7 @@ const ResidentProfileModal: React.FC<ResidentProfileModalProps> = ({ isOpen, onC
                                             <CustomDropdown
                                                 value={formData.studentStatus}
                                                 onChange={(value) => setFormData((prev) => prev ? ({ ...prev, studentStatus: value }) : prev)}
-                                                options={['Not Student', 'Day Care', 'Kinder', 'Elementary', 'Senior High', 'College', 'ALS']}
+                                                options={['Not Student', ...EDUCATION_LEVELS]}
                                                 disabled={!isEditing}
                                                 placeholder="Select Status"
                                             />
