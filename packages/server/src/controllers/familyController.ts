@@ -1,6 +1,7 @@
 import type { Request, Response, NextFunction } from "express";
 import { prisma, Sex } from "@rbi/db";
 import { logCreate, logUpdate, logArchive, logAction } from "../services/auditService.js";
+import { validateResident } from "../services/residentValidation.js";
 
 function computeAge(dateOfBirth: Date | null): number {
   if (!dateOfBirth) return 0;
@@ -304,45 +305,56 @@ export async function addFamilyMember(
       isSoloParent,
     } = req.body;
 
-    const missing: string[] = [];
-    if (!relationshipType) missing.push("relationshipType");
-    if (!firstName) missing.push("firstName");
-    if (!lastName) missing.push("lastName");
-    if (!sex) missing.push("sex");
-    if (missing.length > 0) {
-      return res
-        .status(400)
-        .json({ error: `Missing required fields: ${missing.join(", ")}` });
+    if (!relationshipType) {
+      return res.status(400).json({ error: "relationshipType is required" });
     }
 
-    if (sex !== "Male" && sex !== "Female") {
-      return res.status(400).json({ error: "sex must be Male or Female" });
+    const validation = validateResident(
+      {
+        firstName,
+        lastName,
+        middleName,
+        suffix,
+        dateOfBirth,
+        placeOfBirth,
+        civilStatus,
+        sex,
+        occupation,
+        educationLevel,
+        isStudent: occupation === "Student" ? true : undefined,
+        isVoter,
+        isPwd,
+        isSoloParent,
+        contactNumber,
+      },
+      { requireCore: true }
+    );
+
+    if (validation.errors.length > 0) {
+      return res.status(400).json({ error: validation.errors.join("; ") });
     }
-
-    const occupationType = occupation
-      ? OCCUPATION_TO_TYPE[occupation] ?? occupation
-      : null;
-
-    const studentType =
-      occupation === "Student" && educationLevel ? educationLevel : null;
+    const v = validation.value;
 
     const result = await prisma.$transaction(async (tx) => {
       const resident = await tx.resident.create({
         data: {
-          firstName,
-          lastName,
-          middleName: middleName || null,
-          suffix: suffix || null,
-          dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : null,
-          placeOfBirth: placeOfBirth || null,
-          civilStatus: civilStatus || null,
-          sex: sex as Sex,
-          occupationType,
-          studentType,
-          contactNumber: contactNumber || null,
-          isVoter: isVoter === true,
-          isPwd: isPwd === true,
-          isSoloParent: isSoloParent === true,
+          firstName: v.firstName as string,
+          lastName: v.lastName as string,
+          middleName: (v.middleName as string | undefined) ?? null,
+          suffix: (v.suffix as string | undefined) ?? null,
+          dateOfBirth: v.dateOfBirth ? new Date(v.dateOfBirth as Date) : null,
+          placeOfBirth: (v.placeOfBirth as string | undefined) ?? null,
+          civilStatus: (v.civilStatus as string | undefined) ?? null,
+          sex: (v.sex as Sex | undefined) ?? (sex as Sex),
+          occupationType: (v.occupation as string | undefined) ?? null,
+          studentType:
+            occupation === "Student"
+              ? ((v.educationLevel as string | undefined) ?? null)
+              : null,
+          contactNumber: (v.contactNumber as string | undefined) ?? null,
+          isVoter: v.isVoter === true,
+          isPwd: v.isPwd === true,
+          isSoloParent: v.isSoloParent === true,
         },
       });
 
