@@ -13,87 +13,64 @@ const BusinessClearanceTemplate: React.FC<{ data: any }> = ({ data }) => {
 
   return (
     <div className="bg-white w-full max-w-[210mm] min-h-[297mm] shadow-lg relative text-gray-900 print:shadow-none print:w-full print:max-w-none">
-      {/* Official letterhead (full-bleed) */}
       <Letterhead barangayName={barangayName} />
 
       <div className="relative px-[20mm] pb-[20mm]">
-      {/* Document Title */}
       <div className="text-center mb-12">
-        <h2 className="text-[18pt] font-serif font-bold uppercase border-b-2 border-black inline-block pb-1">Barangay Business Clearance</h2>
+        <h2 className="text-[18pt] font-serif font-bold uppercase border-b-2 border-black inline-block pb-1">Business Clearance</h2>
       </div>
 
-      {/* Salutation */}
       <div className="mb-8">
         <p className="text-[12pt] font-serif font-bold uppercase">To Whom It May Concern:</p>
       </div>
 
-      {/* Body */}
-      <div className="mb-8">
-        <p className="text-[12pt] font-serif leading-relaxed indent-12 mb-8">
-          This is to certify that the business establishment described below:
-        </p>
-
-        <div className="space-y-4 pl-8">
-          <div className="grid grid-cols-[180px_1fr] items-end gap-4">
-            <span className="text-[12pt] font-serif font-bold">Business Name:</span>
-            <div className="border-b border-black text-[12pt] font-serif font-bold uppercase px-2">
-              {businessName}
-            </div>
-          </div>
-          <div className="grid grid-cols-[180px_1fr] items-end gap-4">
-            <span className="text-[12pt] font-serif font-bold">Proprietor/Owner:</span>
-            <div className="border-b border-black text-[12pt] font-serif font-bold uppercase px-2">
-              {selectedResident || 'JUAN DELA CRUZ'}
-            </div>
-          </div>
-          <div className="grid grid-cols-[180px_1fr] items-end gap-4">
-            <span className="text-[12pt] font-serif font-bold">Business Address:</span>
-            <div className="border-b border-black text-[12pt] font-serif font-bold uppercase px-2">
-              {businessAddress}
-            </div>
-          </div>
-          <div className="grid grid-cols-[180px_1fr] items-end gap-4">
-            <span className="text-[12pt] font-serif font-bold">Nature of Business:</span>
-            <div className="border-b border-black text-[12pt] font-serif font-bold uppercase px-2">
-              {natureOfBusiness}
-            </div>
-          </div>
-        </div>
-      </div>
-
       <div className="mb-8">
         <p className="text-[12pt] font-serif leading-relaxed indent-12 mb-6">
-          Has been inspected and found to be complying with the existing rules and regulations of this Barangay.
+          THIS IS TO CERTIFY that Mr./Mrs.{' '}
+          <span className="font-bold uppercase">{selectedResident || 'OWNER NAME'}</span>, owner of a{' '}
+          <span className="font-bold uppercase">{natureOfBusiness || 'BUSINESS'}</span> with
+          business address located at{' '}
+          <span className="font-bold">{businessAddress || 'BUSINESS ADDRESS'}</span> under the trade
+          name <span className="font-bold uppercase">{businessName || 'TRADE NAME'}</span> were
+          allowed to operate its business/ activity within the jurisdiction of{' '}
+          <span className="font-bold uppercase">{barangayName || 'BARANGAY 418'} ZONE 43</span>,
+          pursuant to provision of Section 162, Republic Act No. 7160 otherwise known as THE LOCAL
+          GOVERNMENT CODE OF 1991.
+        </p>
+        <p className="text-[12pt] font-serif leading-relaxed indent-12 mb-6">
+          “Failure to comply with the requirements of the City Government of Manila shall cause this
+          clearance to be revoke and cancelled.”
         </p>
         <p className="text-[12pt] font-serif leading-relaxed indent-12 mb-8">
-          This clearance is being issued upon the request of the above-mentioned person for whatever legal intent/purpose it may serve.
+          This Business Clearance is issued upon the request of the owner for Business Permit and
+          Licensing Office only.
         </p>
         <p className="text-[12pt] font-serif leading-relaxed indent-12">
-          Issued this <span className="font-bold">4th</span> day of <span className="font-bold">January, 2026</span> at {barangayName}, Sampaloc, Manila.
+          Issued this <span className="font-bold">{data.day || '____'}</span> day of{' '}
+          <span className="font-bold">{data.month || '__________'}</span>,{' '}
+          <span className="font-bold">{data.year || '2026'}</span> at {barangayName || 'Barangay 418'}, Sampaloc, Manila.
         </p>
+        {data.validUntil && (
+          <p className="text-[12pt] font-serif leading-relaxed indent-12 mt-4">
+            Valid until <span className="font-bold">{data.validUntil}</span>.
+          </p>
+        )}
       </div>
 
-      {/* Signatories */}
       <div className="mt-24 flex justify-end">
         <div className="text-center w-[250px]">
           <p className="text-[12pt] font-serif font-bold uppercase border-b border-black pb-1">Hon. {punongBarangay}</p>
-          <p className="text-[10pt] font-serif font-bold mt-1">Barangay Captain</p>
+          <p className="text-[10pt] font-serif font-bold mt-1">Barangay Chairwoman</p>
         </div>
       </div>
 
-      {/* Footer / OR Details */}
-      <div className="mt-24 text-[9pt] font-mono text-gray-600">
-        <div className="grid grid-cols-[100px_1fr] gap-1">
-          <span>OR Number:</span>
-          <span>{data.orNumber || 'N/A'}</span>
-        </div>
+      <div className="mt-16 space-y-1 text-[11pt] font-serif uppercase">
+        <p>Not valid without barangay seal</p>
+        <p className="font-mono text-[10pt] normal-case">
+          OR No.: {data.orNumber || 'N/A'}
+        </p>
       </div>
 
-      </div>
-
-      {/* Watermark/Seal Placeholder */}
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[400px] h-[400px] rounded-full border-[20px] border-gray-100 opacity-50 pointer-events-none flex items-center justify-center">
-        <div className="w-[300px] h-[300px] rounded-full border-[10px] border-gray-100"></div>
       </div>
     </div>
   );
