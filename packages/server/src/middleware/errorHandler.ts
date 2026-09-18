@@ -9,6 +9,17 @@ export function errorHandler(
   _next: NextFunction
 ) {
   console.error(err.stack ?? err);
-  const status = err.status ?? err.statusCode ?? 500;
-  res.status(status).json({ error: err.message ?? "Internal Server Error" });
+  let status = err.status ?? err.statusCode;
+  let message = err.message ?? "Internal Server Error";
+
+  if (!status && (err as any).code === "P2002") {
+    status = 400;
+    message = "A record with these details already exists.";
+  }
+  if (!status && (err as any).code === "P2003") {
+    status = 400;
+    message = "A related record was not found.";
+  }
+
+  res.status(status ?? 500).json({ error: message });
 }
