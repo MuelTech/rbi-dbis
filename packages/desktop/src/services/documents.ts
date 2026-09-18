@@ -25,6 +25,7 @@ export interface DocumentTypeRecord {
   id: string;
   documentName: string;
   amount: number;
+  validityDays: number | null;
 }
 
 export interface CreateDocumentPayload {
@@ -33,6 +34,7 @@ export interface CreateDocumentPayload {
   purpose: string;
   validityPeriod?: string;
   formData?: Record<string, any>;
+  force?: boolean;
 }
 
 export interface FtjsStatus {
