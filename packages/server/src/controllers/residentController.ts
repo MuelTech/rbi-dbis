@@ -166,6 +166,17 @@ export async function getResidentLookup(
   }
 }
 
+type ResidentAuditRow = {
+  id: string;
+  timestamp: Date;
+  personnelName: string;
+  actionType: string;
+  fieldName: string | null;
+  oldValue: string | null;
+  newValue: string | null;
+  summary: string | null;
+};
+
 async function buildResidentDetail(id: string) {
   const [resident, auditTrails] = await Promise.all([
     prisma.resident.findUnique({
@@ -242,16 +253,43 @@ async function buildResidentDetail(id: string) {
       : o.user?.username ?? "",
   }));
 
-  const shapedAuditTrails = auditTrails.map((a) => ({
-    id: a.id,
-    timestamp: a.timestamp,
-    personnelName: a.user?.userInfo
+  const shapedAuditTrails = auditTrails.flatMap(
+    (a): ResidentAuditRow[] => {
+    const personnelName = a.user?.userInfo
       ? `${a.user.userInfo.firstName} ${a.user.userInfo.lastName}`
-      : a.user?.username ?? "",
-    actionType: a.actionType,
-    changes: a.changes,
-    summary: a.summary,
-  }));
+      : a.user?.username ?? "";
+    const changes = (a.changes ?? {}) as Record<string, [unknown, unknown]>;
+    const entries = Object.entries(changes);
+
+    if (entries.length === 0) {
+      return [
+        {
+          id: a.id,
+          timestamp: a.timestamp,
+          personnelName,
+          actionType: a.actionType,
+          fieldName: null,
+          oldValue: null,
+          newValue: null,
+          summary: a.summary,
+        },
+      ];
+    }
+
+    return entries.map(([fieldName, pair], index) => {
+      const [oldVal, newVal] = Array.isArray(pair) ? pair : [null, null];
+      return {
+        id: `${a.id}-${index}`,
+        timestamp: a.timestamp,
+        personnelName,
+        actionType: a.actionType,
+        fieldName,
+        oldValue: oldVal == null ? null : String(oldVal),
+        newValue: newVal == null ? null : String(newVal),
+        summary: a.summary,
+      };
+    });
+  });
 
   return {
     id: resident.id,
@@ -385,10 +423,16 @@ export async function updateResident(
           firstName: oldResident.firstName,
           lastName: oldResident.lastName,
           middleName: oldResident.middleName,
+          suffix: oldResident.suffix,
+          placeOfBirth: oldResident.placeOfBirth,
+          dateOfBirth: oldResident.dateOfBirth,
           sex: oldResident.sex,
           civilStatus: oldResident.civilStatus,
           isVoter: oldResident.isVoter,
           isPwd: oldResident.isPwd,
+          isSoloParent: oldResident.isSoloParent,
+          isOwner: oldResident.isOwner,
+          studentType: oldResident.studentType,
           contactNumber: oldResident.contactNumber,
           occupationType: oldResident.occupationType,
           statusType: oldResident.statusType,
@@ -397,10 +441,16 @@ export async function updateResident(
           firstName: newData.firstName,
           lastName: newData.lastName,
           middleName: newData.middleName,
+          suffix: newData.suffix,
+          placeOfBirth: newData.placeOfBirth,
+          dateOfBirth: newData.dateOfBirth,
           sex: newData.sex,
           civilStatus: newData.civilStatus,
           isVoter: newData.isVoter,
           isPwd: newData.isPwd,
+          isSoloParent: newData.isSoloParent,
+          isOwner: newData.isOwner,
+          studentType: newData.studentType,
           contactNumber: newData.contactNumber,
           occupationType: newData.occupationType,
           statusType: newData.statusType,

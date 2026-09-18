@@ -728,6 +728,8 @@ const ResidentProfileModal: React.FC<ResidentProfileModalProps> = ({ isOpen, onC
                                                                         <span className="px-2.5 py-1 rounded-md bg-orange-50 text-orange-600 text-[11px] font-bold border border-orange-100">
                                                                             {log.fieldName}
                                                                         </span>
+                                                                    ) : log.summary ? (
+                                                                        <span className="text-gray-600 text-[13px]">{log.summary}</span>
                                                                     ) : (
                                                                         <span className="text-gray-400 text-[13px]">—</span>
                                                                     )}
