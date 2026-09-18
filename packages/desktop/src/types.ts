@@ -99,6 +99,7 @@ export interface ResidentAuditTrail {
   fieldName: string | null;
   oldValue: string | null;
   newValue: string | null;
+  summary?: string | null;
 }
 
 export interface ResidentDetail extends Resident {

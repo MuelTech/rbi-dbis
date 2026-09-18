@@ -119,6 +119,20 @@ export async function deleteActivityLog(
 ) {
   try {
     const id = req.params.id as string;
+    const log = await prisma.auditTrail.findUnique({
+      where: { id },
+      select: { tableName: true },
+    });
+    if (!log) {
+      res.status(404).json({ error: "Log not found" });
+      return;
+    }
+    if (log.tableName === "residents") {
+      res
+        .status(403)
+        .json({ error: "Resident history cannot be deleted." });
+      return;
+    }
     await prisma.auditTrail.delete({ where: { id } });
     res.status(204).end();
   } catch (err) {
@@ -135,12 +149,17 @@ export async function bulkDeleteActivityLogs(
     const { ids, olderThan } = req.body;
 
     if (ids && Array.isArray(ids)) {
-      await prisma.auditTrail.deleteMany({ where: { id: { in: ids } } });
-      res.json({ deleted: ids.length });
+      const result = await prisma.auditTrail.deleteMany({
+        where: { id: { in: ids }, tableName: { not: "residents" } },
+      });
+      res.json({ deleted: result.count });
     } else if (olderThan) {
       const cutoffDate = new Date(olderThan);
       const result = await prisma.auditTrail.deleteMany({
-        where: { timestamp: { lt: cutoffDate } },
+        where: {
+          timestamp: { lt: cutoffDate },
+          tableName: { not: "residents" },
+        },
       });
       res.json({ deleted: result.count });
     } else {
