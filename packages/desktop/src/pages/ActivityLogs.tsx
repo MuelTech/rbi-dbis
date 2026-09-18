@@ -6,8 +6,8 @@ import ConfirmationModal from '@/components/ui/ConfirmationModal';
 import SuccessToast from '@/components/ui/SuccessToast';
 import { activityLogsService, AuditLog } from '@/services/activityLogs';
 
-const ACTION_TYPES = ['CREATE', 'UPDATE', 'ARCHIVE'];
-const TABLE_NAMES = ['residents', 'families', 'users'];
+const ACTION_TYPES = ['CREATE', 'UPDATE', 'ARCHIVE', 'BATCH_IMPORT', 'EXPORT'];
+const TABLE_NAMES = ['residents', 'families', 'users', 'reports'];
 
 const ActivityLogs: React.FC = () => {
     const queryClient = useQueryClient();
@@ -266,6 +266,8 @@ const ActivityLogs: React.FC = () => {
             case 'CREATE': return 'bg-green-100 text-green-700 border-green-200';
             case 'UPDATE': return 'bg-yellow-100 text-yellow-700 border-yellow-200';
             case 'ARCHIVE': return 'bg-red-100 text-red-700 border-red-200';
+            case 'BATCH_IMPORT': return 'bg-blue-100 text-blue-700 border-blue-200';
+            case 'EXPORT': return 'bg-purple-100 text-purple-700 border-purple-200';
             default: return 'bg-gray-100 text-gray-700 border-gray-200';
         }
     };

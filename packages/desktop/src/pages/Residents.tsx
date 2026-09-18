@@ -159,6 +159,7 @@ const Residents: React.FC<ResidentsProps> = ({ setIsNavigationBlocked, onShowSuc
                 data: result.data,
                 generatedBy: user ? `${user.firstName} ${user.lastName}` : 'Unknown',
             });
+            reportService.logExport({ format: 'PDF', count: result.data.length }).catch(() => {});
         } catch (err) {
             alert('Failed to generate report');
         }
@@ -211,6 +212,7 @@ const Residents: React.FC<ResidentsProps> = ({ setIsNavigationBlocked, onShowSuc
 
             // Download
             XLSX.writeFile(wb, `Residents_${new Date().toISOString().split('T')[0]}.csv`);
+            reportService.logExport({ format: 'CSV', count: result.data.length }).catch(() => {});
         } catch (err) {
             alert('Failed to generate CSV');
         }

@@ -699,7 +699,7 @@ export async function batchImportResidents(
         "residents",
         "batch-import",
         userId,
-        "CREATE",
+        "BATCH_IMPORT",
         null,
         `Batch import: ${totalCreated} created, ${totalSkipped} skipped, ${errors.length} errors`
       );

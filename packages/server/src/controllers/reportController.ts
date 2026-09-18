@@ -8,7 +8,6 @@ export async function getFilteredResidents(
   next: NextFunction
 ) {
   try {
-    const userId = req.user?.id;
     const sex = req.query.sex as string;
     const isVoter = req.query.isVoter as string;
     const isPwd = req.query.isPwd as string;
@@ -91,24 +90,35 @@ export async function getFilteredResidents(
       };
     });
 
-    // Log the report generation
-    if (userId) {
-      const filters = Object.entries({ sex, isVoter, isPwd, isSoloParent, isFamilyHead, studentType, status })
-        .filter(([_, v]) => v)
-        .map(([k, v]) => `${k}=${v}`)
-        .join(", ");
-      
+    res.json({ data, total: data.length });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function logReportExport(
+  req: Request,
+  res: Response,
+  next: NextFunction
+) {
+  try {
+    const userId = req.user?.id;
+    const format = String(req.body?.format ?? "").trim().toUpperCase();
+    const report = String(req.body?.report ?? "resident-list").trim();
+    const count = Number(req.body?.count) || 0;
+
+    if (userId && (format === "CSV" || format === "PDF")) {
       await logAction(
         "reports",
-        "resident-list",
+        report,
         userId,
-        "CREATE",
+        "EXPORT",
         null,
-        `Generated resident report (${data.length} records)${filters ? ` with filters: ${filters}` : ""}`
+        `Exported ${report} as ${format} (${count} record${count === 1 ? "" : "s"})`
       );
     }
 
-    res.json({ data, total: data.length });
+    res.json({ ok: true });
   } catch (err) {
     next(err);
   }

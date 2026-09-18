@@ -44,4 +44,6 @@ export const reportService = {
     const qs = params.toString();
     return api.get<ReportResponse>(`/report/residents${qs ? `?${qs}` : ""}`);
   },
+  logExport: (data: { format: "CSV" | "PDF"; report?: string; count?: number }) =>
+    api.post<{ ok: boolean }>("/report/export", data),
 };
