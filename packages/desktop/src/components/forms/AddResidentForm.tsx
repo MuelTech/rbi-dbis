@@ -990,6 +990,11 @@ const AddResidentForm: React.FC<AddResidentFormProps> = ({ onCancel, setIsNaviga
                                         </label>
                                     ))}
                                 </div>
+                                {(errors.headIsVoter || errors.headIsPwd || errors.headIsSoloParent) && (
+                                    <p className="text-red-500 text-xs font-medium mt-3">
+                                        {errors.headIsVoter || errors.headIsPwd || errors.headIsSoloParent}
+                                    </p>
+                                )}
                             </div>
                         </>
                     )}
@@ -1293,6 +1298,11 @@ const AddResidentForm: React.FC<AddResidentFormProps> = ({ onCancel, setIsNaviga
                                                                 </label>
                                                             ))}
                                                         </div>
+                                                        {(errors[`member_${member.id}_isVoter`] || errors[`member_${member.id}_isPwd`] || errors[`member_${member.id}_isSoloParent`]) && (
+                                                            <p className="text-red-500 text-xs font-medium mt-3">
+                                                                {errors[`member_${member.id}_isVoter`] || errors[`member_${member.id}_isPwd`] || errors[`member_${member.id}_isSoloParent`]}
+                                                            </p>
+                                                        )}
                                                     </div>
                                                 </div>
                                             )}
