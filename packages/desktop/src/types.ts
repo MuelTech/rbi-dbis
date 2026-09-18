@@ -108,7 +108,8 @@ export interface ResidentDetail extends Resident {
   profileImage?: string | null;
   familyHead: { name: string } | null;
   relationshipToHead: string | null;
-  household: { householdNo: string; streetName: string; alley: string } | null;
+  familyDisplayId?: number | null;
+  household: { householdNo: string; blockNumber?: string; streetName: string; alley: string } | null;
   orders: ResidentOrder[];
   auditTrails: ResidentAuditTrail[];
 }
