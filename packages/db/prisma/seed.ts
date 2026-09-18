@@ -60,10 +60,11 @@ async function main() {
   console.log("\nSeeding document types...");
 
   const documentTypes = [
-    { documentName: "Barangay Business Clearance", amount: 500 },
-    { documentName: "Certificate of Indigency", amount: 0 },
-    { documentName: "Barangay Clearance", amount: 200 },
-    { documentName: "Barangay Certificate (FTJS)", amount: 0 },
+    { documentName: "Barangay Business Clearance", amount: 500, validityDays: 365 },
+    { documentName: "Certificate of Indigency", amount: 0, validityDays: null },
+    { documentName: "Barangay Clearance", amount: 200, validityDays: 180 },
+    { documentName: "Certificate of Residency", amount: 150, validityDays: 180 },
+    { documentName: "Barangay Certificate (FTJS)", amount: 0, validityDays: 365 },
   ];
 
   for (const dt of documentTypes) {
@@ -74,13 +75,14 @@ async function main() {
     if (existing) {
       await prisma.documentType.update({
         where: { id: existing.id },
-        data: { amount: dt.amount },
+        data: { amount: dt.amount, validityDays: dt.validityDays },
       });
     } else {
       await prisma.documentType.create({
         data: {
           documentName: dt.documentName,
           amount: dt.amount,
+          validityDays: dt.validityDays,
         },
       });
     }

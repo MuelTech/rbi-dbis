@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { api, setUnauthorizedHandler } from "./api";
+import { api, ApiError, setUnauthorizedHandler } from "./api";
 
 beforeEach(() => {
   vi.stubGlobal("localStorage", { getItem: () => null });
@@ -45,5 +45,30 @@ describe("api unauthorized handling", () => {
   it("returns parsed json on success", async () => {
     mockFetch(200, { ok: true });
     await expect(api.get("/health")).resolves.toEqual({ ok: true });
+  });
+});
+
+describe("ApiError", () => {
+  it("carries status, code, and parsed body", async () => {
+    mockFetch(409, {
+      error: "An existing Barangay Clearance is still valid.",
+      code: "DUPLICATE_VALID_DOCUMENT",
+      existing: { documentId: "d1" },
+    });
+
+    const err = await api.post("/documents", {}).catch((e) => e);
+    expect(err).toBeInstanceOf(ApiError);
+    expect(err).toMatchObject({
+      status: 409,
+      code: "DUPLICATE_VALID_DOCUMENT",
+      body: { existing: { documentId: "d1" } },
+      message: "An existing Barangay Clearance is still valid.",
+    });
+  });
+
+  it("leaves code undefined when the body has none", async () => {
+    mockFetch(500, { error: "boom" });
+    const err = await api.get("/x").catch((e) => e);
+    expect(err).toMatchObject({ status: 500, code: undefined });
   });
 });

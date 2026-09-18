@@ -11,6 +11,22 @@ export function notifyUnauthorized() {
   if (unauthorizedHandler) unauthorizedHandler();
 }
 
+/** Error carrying the HTTP status and parsed response body (e.g. `code`). */
+export class ApiError extends Error {
+  status: number;
+  code?: string;
+  body: unknown;
+
+  constructor(message: string, status: number, body: unknown) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+    this.body = body;
+    const code = (body as { code?: unknown } | null)?.code;
+    this.code = typeof code === "string" ? code : undefined;
+  }
+}
+
 function authHeaders(): Record<string, string> {
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
@@ -36,7 +52,7 @@ async function request<T>(
       notifyUnauthorized();
     }
     const body = await res.json().catch(() => ({}));
-    throw new Error(body.error ?? `Request failed: ${res.status}`);
+    throw new ApiError(body.error ?? `Request failed: ${res.status}`, res.status, body);
   }
 
   if (res.status === 204) return undefined as T;

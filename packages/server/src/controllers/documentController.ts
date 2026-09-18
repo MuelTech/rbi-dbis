@@ -7,6 +7,10 @@ import {
   isFtjsStillValid,
   type FtjsStatus,
 } from "../services/ftjsPolicy.js";
+import {
+  documentValidUntil,
+  isDocumentStillValid,
+} from "../services/documentDuplicatePolicy.js";
 
 export async function getNextOrNumber(
   _req: Request,
@@ -216,6 +220,7 @@ export async function createDocument(
   try {
     const userId = req.user?.id;
     const { residentId, documentTypeId, purpose, validityPeriod, formData } = req.body;
+    const force = req.body.force === true;
 
     // Validate required fields
     if (!residentId || !documentTypeId) {
@@ -245,6 +250,39 @@ export async function createDocument(
         return res.status(409).json({
           error:
             "FTJS certificate already issued for this resident. Reprint is allowed only while still valid; a new availment is not allowed.",
+        });
+      }
+    }
+
+    // Warn when the resident already holds a same-type document that is still
+    // within its validity. Staff can override the warning with force: true.
+    if (!isFtjs && !force) {
+      const existing = await prisma.document.findFirst({
+        where: {
+          documentTypeId: documentType.id,
+          order: { residentId },
+        },
+        orderBy: { issueDate: "desc" },
+        include: { order: { select: { orNumber: true } } },
+      });
+
+      if (
+        existing &&
+        isDocumentStillValid(existing.issueDate, documentType.validityDays)
+      ) {
+        const validUntil = documentValidUntil(
+          existing.issueDate,
+          documentType.validityDays
+        );
+        return res.status(409).json({
+          error: `An existing ${documentType.documentName} is still valid.`,
+          code: "DUPLICATE_VALID_DOCUMENT",
+          existing: {
+            documentId: existing.id,
+            orNumber: existing.order?.orNumber ?? null,
+            issueDate: existing.issueDate.toISOString(),
+            validUntil: validUntil ? validUntil.toISOString() : null,
+          },
         });
       }
     }
@@ -312,6 +350,7 @@ export async function createDocument(
       await logCreate("documents", result.document.id, userId, {
         purpose: result.document.purpose,
         orNumber: result.order.orNumber,
+        ...(force ? { duplicateOverride: "yes" } : {}),
       });
     }
 

@@ -46,6 +46,12 @@ const Document: React.FC<DocumentProps> = ({ setIsNavigationBlocked }) => {
   const [showPrefillBanner, setShowPrefillBanner] = useState(false);
   const [ftjsStatus, setFtjsStatus] = useState<FtjsStatus | null>(null);
   const [ftjsMode, setFtjsMode] = useState<'issue' | 'reprint' | null>(null);
+  const [duplicateWarning, setDuplicateWarning] = useState<{
+    documentName: string;
+    orNumber: string | null;
+    issueDate: string;
+    validUntil: string | null;
+  } | null>(null);
 
   const FTJS_TYPE_NAME = 'Barangay Certificate (FTJS)';
 
@@ -65,6 +71,7 @@ const Document: React.FC<DocumentProps> = ({ setIsNavigationBlocked }) => {
     setFormData({});
     setFtjsStatus(null);
     setFtjsMode(null);
+    setDuplicateWarning(null);
     setPreviousDocumentData(null);
     setShowPrefillBanner(false);
   };
@@ -309,6 +316,80 @@ const Document: React.FC<DocumentProps> = ({ setIsNavigationBlocked }) => {
     setShowConfirmModal(true);
   };
 
+  const issueDocument = async (force: boolean) => {
+    const documentTypeId = formData.documentTypeId;
+    if (!selectedResidentId || !documentTypeId) return;
+
+    setIsIssuing(true);
+
+    try {
+      const result = await documentsService.create({
+        residentId: selectedResidentId,
+        documentTypeId,
+        purpose: purpose === 'Other' ? otherPurpose : purpose,
+        formData,
+        validityPeriod:
+          documentType === FTJS_TYPE_NAME
+            ? formData.validUntil || undefined
+            : undefined,
+        force,
+      });
+
+      setShowConfirmModal(false);
+      setDuplicateWarning(null);
+
+      // Update formData with OR Number
+      setFormData(prev => ({
+        ...prev,
+        orNumber: result.order?.orNumber ?? '',
+      }));
+
+      // Build a meaningful default file name for the Save-as-PDF option.
+      const sanitize = (s: string) =>
+        s
+          .replace(/[\\/:*?"<>|]+/g, "_")
+          .replace(/\s+/g, "_")
+          .replace(/_+/g, "_")
+          .replace(/^_+|_+$/g, "");
+      const residentName = formData.selectedResident || "Resident";
+      const docName = activeConfig?.name || documentType;
+      const dateStr = new Date().toISOString().slice(0, 10);
+      setIssuePdfName(
+        `${sanitize(residentName)}_${sanitize(docName)}_${dateStr}.pdf`
+      );
+
+      // Wait for the preview to render the OR number, then let the user
+      // choose to save the PDF or print it.
+      setTimeout(() => {
+        setShowIssueActions(true);
+        setIsIssuing(false);
+      }, 150);
+    } catch (err: any) {
+      // An existing document of the same type is still valid: warn the staff
+      // member and let them override with "Issue Anyway".
+      if (err?.code === 'DUPLICATE_VALID_DOCUMENT' && err?.body?.existing) {
+        setShowConfirmModal(false);
+        setDuplicateWarning({
+          documentName: documentType,
+          orNumber: err.body.existing.orNumber ?? null,
+          issueDate: err.body.existing.issueDate,
+          validUntil: err.body.existing.validUntil ?? null,
+        });
+        setIsIssuing(false);
+        return;
+      }
+
+      const message =
+        err?.message ||
+        err?.error ||
+        (typeof err === 'string' ? err : '') ||
+        'Failed to create document. Please try again.';
+      alert(message);
+      setShowConfirmModal(false);
+      setIsIssuing(false);
+    }
+  };
+
   const handleConfirmIssue = async () => {
     if (!selectedResidentId || !activeConfig) return;
 
@@ -339,58 +420,11 @@ const Document: React.FC<DocumentProps> = ({ setIsNavigationBlocked }) => {
       return;
     }
 
-    setIsIssuing(true);
+    await issueDocument(false);
+  };
 
-    try {
-      const result = await documentsService.create({
-        residentId: selectedResidentId,
-        documentTypeId,
-        purpose: purpose === 'Other' ? otherPurpose : purpose,
-        formData,
-        validityPeriod:
-          documentType === FTJS_TYPE_NAME
-            ? formData.validUntil || undefined
-            : undefined,
-      });
-
-      // Update formData with OR Number
-      setFormData(prev => ({
-        ...prev,
-        orNumber: result.order?.orNumber ?? '',
-      }));
-
-      setShowConfirmModal(false);
-
-      // Build a meaningful default file name for the Save-as-PDF option.
-      const sanitize = (s: string) =>
-        s
-          .replace(/[\\/:*?"<>|]+/g, "_")
-          .replace(/\s+/g, "_")
-          .replace(/_+/g, "_")
-          .replace(/^_+|_+$/g, "");
-      const residentName = formData.selectedResident || "Resident";
-      const docName = activeConfig?.name || documentType;
-      const dateStr = new Date().toISOString().slice(0, 10);
-      setIssuePdfName(
-        `${sanitize(residentName)}_${sanitize(docName)}_${dateStr}.pdf`
-      );
-
-      // Wait for the preview to render the OR number, then let the user
-      // choose to save the PDF or print it.
-      setTimeout(() => {
-        setShowIssueActions(true);
-        setIsIssuing(false);
-      }, 150);
-    } catch (err: any) {
-      const message =
-        err?.message ||
-        err?.error ||
-        (typeof err === 'string' ? err : '') ||
-        'Failed to create document. Please try again.';
-      alert(message);
-      setShowConfirmModal(false);
-      setIsIssuing(false);
-    }
+  const handleDuplicateOverride = () => {
+    issueDocument(true);
   };
 
   const finalizeIssue = () => {
@@ -752,6 +786,81 @@ const Document: React.FC<DocumentProps> = ({ setIsNavigationBlocked }) => {
         cancelText="Cancel"
         isLoading={isIssuing}
       />
+
+      {/* Duplicate still-valid document warning */}
+      {duplicateWarning && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
+            <div className="p-6 pb-2 flex items-start gap-3">
+              <div className="w-8 h-8 rounded-full bg-yellow-100 flex items-center justify-center shrink-0">
+                <AlertTriangle size={20} className="text-yellow-500" />
+              </div>
+              <h3 className="text-xl font-bold text-gray-900">Document Still Valid</h3>
+            </div>
+            <div className="px-6 py-2 text-[15px] text-gray-600 leading-relaxed space-y-3">
+              <p>
+                <span className="font-bold text-gray-900">
+                  {formData.selectedResident || 'This resident'}
+                </span>{' '}
+                already has a{' '}
+                <span className="font-bold text-gray-900">
+                  {duplicateWarning.documentName}
+                </span>{' '}
+                that is still valid.
+              </p>
+              <div className="bg-gray-50 rounded-xl p-4 text-sm space-y-1.5">
+                <div className="flex justify-between">
+                  <span className="text-gray-500">OR Number</span>
+                  <span className="font-semibold text-gray-900">
+                    {duplicateWarning.orNumber || '—'}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-500">Issued</span>
+                  <span className="font-semibold text-gray-900">
+                    {new Date(duplicateWarning.issueDate).toLocaleDateString('en-US', {
+                      year: 'numeric',
+                      month: 'long',
+                      day: 'numeric',
+                    })}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-500">Valid until</span>
+                  <span className="font-semibold text-gray-900">
+                    {duplicateWarning.validUntil
+                      ? new Date(duplicateWarning.validUntil).toLocaleDateString('en-US', {
+                          year: 'numeric',
+                          month: 'long',
+                          day: 'numeric',
+                        })
+                      : 'Does not expire'}
+                  </span>
+                </div>
+              </div>
+              <p className="text-sm text-gray-500">
+                You can still issue a new one if needed.
+              </p>
+            </div>
+            <div className="p-6 flex items-center justify-end gap-3">
+              <button
+                onClick={() => setDuplicateWarning(null)}
+                disabled={isIssuing}
+                className="px-4 py-2.5 rounded-lg border border-gray-200 text-gray-700 font-bold text-[14px] hover:bg-gray-50 transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDuplicateOverride}
+                disabled={isIssuing}
+                className="px-4 py-2.5 rounded-lg bg-yellow-600 hover:bg-yellow-700 text-white font-bold text-[14px] transition-colors shadow-lg shadow-yellow-200 disabled:opacity-50"
+              >
+                {isIssuing ? 'Issuing...' : 'Issue Anyway'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Post-issue actions: save a named PDF or print */}
       {showIssueActions && (
