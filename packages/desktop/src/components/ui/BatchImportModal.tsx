@@ -6,6 +6,7 @@ import Modal from '@/components/ui/Modal';
 import { residentsService } from '@/services/residents';
 import { chunkFamilies, mergeChunkResults, summarizeImportFamilies, type BatchImportResult, type ImportRowStatus } from '@/utils/batchImport';
 import { readSheetRows } from '@/utils/spreadsheet';
+import { validateResidentFields } from '@/utils/residentValidation';
 
 // --- Types ---
 
@@ -136,6 +137,51 @@ function validateRow(row: Record<string, string>, isHead: boolean): ValidationEr
       errors.push({ field, message: 'Must be "Yes" or "No"' });
     }
   }
+
+  const asBool = (value?: string) =>
+    value ? ['yes', 'true'].includes(value.toLowerCase().trim()) : undefined;
+  const residentErrors = validateResidentFields({
+    firstName: row.first_name,
+    middleName: row.middle_name,
+    lastName: row.last_name,
+    suffix: row.suffix,
+    placeOfBirth: row.place_of_birth,
+    dateOfBirth: row.date_of_birth,
+    sex: row.sex,
+    civilStatus: row.civil_status,
+    occupation: row.occupation,
+    educationLevel: row.education_level,
+    isStudent: asBool(row.is_student),
+    isVoter: asBool(row.is_voter),
+    contactNumber: row.contact_number,
+  });
+  const fieldMap: Record<string, string> = {
+    firstName: 'first_name', middleName: 'middle_name', lastName: 'last_name',
+    suffix: 'suffix', placeOfBirth: 'place_of_birth', dateOfBirth: 'date_of_birth',
+    sex: 'sex', civilStatus: 'civil_status', occupation: 'occupation',
+    educationLevel: 'education_level', isVoter: 'is_voter', contactNumber: 'contact_number',
+  };
+  for (const [field, message] of Object.entries(residentErrors)) {
+    const key = fieldMap[field] ?? field;
+    if (!errors.some((e) => e.field === key)) errors.push({ field: key, message });
+  }
+
+  const countRules: [string, number, string][] = [
+    ['number_of_dogs', 100, 'Number of dogs'],
+    ['number_of_cats', 100, 'Number of cats'],
+    ['number_of_motorcycles', 50, 'Number of motorcycles'],
+    ['number_of_other_vehicles', 50, 'Number of other vehicles'],
+  ];
+  for (const [field, max, label] of countRules) {
+    const value = row[field];
+    if (value !== undefined && value.trim() !== '') {
+      const n = Number(value);
+      if (!Number.isInteger(n) || n < 0 || n > max) {
+        errors.push({ field, message: `${label} must be between 0 and ${max}` });
+      }
+    }
+  }
+
   return errors;
 }
 

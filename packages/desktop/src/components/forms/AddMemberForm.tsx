@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { User, Users, Briefcase, GraduationCap, FileText, ChevronLeft, Check, ChevronDown, Loader2 } from 'lucide-react';
 import ConfirmationModal from '@/components/ui/ConfirmationModal';
 import type { AddFamilyMemberPayload } from '@/services/families';
+import { EDUCATION_LEVELS, validateResidentFields } from '@/utils/residentValidation';
 
 interface AddMemberFormProps {
     onCancel: () => void;
@@ -28,12 +29,10 @@ const OCCUPATION_OPTIONS = [
     { value: 'Student', label: 'Student' },
 ];
 
-const EDUCATION_LEVEL_OPTIONS = [
-    { value: 'Elementary', label: 'Elementary' },
-    { value: 'High School', label: 'High School' },
-    { value: 'College', label: 'College' },
-    { value: 'Vocational', label: 'Vocational' },
-];
+const EDUCATION_LEVEL_OPTIONS = EDUCATION_LEVELS.map((value) => ({
+    value,
+    label: value,
+}));
 
 const RELATIONSHIP_OPTIONS = [
     { value: 'Spouse', label: 'Spouse' },
@@ -160,6 +159,32 @@ const AddMemberForm: React.FC<AddMemberFormProps> = ({ onCancel, onSubmit }) => 
 
         if (formData.isStudent === 'Yes') {
             if (!formData.educationLevel) newErrors.educationLevel = 'Education Level is required';
+        }
+
+        const fieldMap: Record<string, string> = {
+            firstName: 'firstName', middleName: 'middleName', lastName: 'lastName',
+            suffix: 'suffix', placeOfBirth: 'birthPlace', dateOfBirth: 'birthDate',
+            sex: 'sex', civilStatus: 'civilStatus', occupation: 'occupation',
+            educationLevel: 'educationLevel', isVoter: 'isVoter', contactNumber: 'contactNumber',
+        };
+        const fieldErrors = validateResidentFields({
+            firstName: formData.firstName,
+            middleName: formData.middleName,
+            lastName: formData.lastName,
+            suffix: formData.suffix,
+            placeOfBirth: formData.birthPlace,
+            dateOfBirth: formData.birthDate,
+            sex: formData.sex,
+            civilStatus: formData.civilStatus,
+            occupation: formData.occupation,
+            educationLevel: formData.educationLevel,
+            isStudent: formData.isStudent === 'Yes',
+            isVoter: formData.isVoter,
+            contactNumber: formData.contactNumber,
+        }, { requireCore: true });
+        for (const [field, message] of Object.entries(fieldErrors)) {
+            const key = fieldMap[field] ?? field;
+            if (!newErrors[key]) newErrors[key] = message;
         }
 
         setErrors(newErrors);
