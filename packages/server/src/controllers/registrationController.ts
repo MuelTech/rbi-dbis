@@ -97,12 +97,20 @@ export async function registerFamily(
         });
       }
 
-      const createdHousehold = await tx.household.create({
-        data: {
-          brgyHouseholdNo: household.brgyHouseholdNo,
+      let createdHousehold = await tx.household.findFirst({
+        where: {
           blockId: block.id,
+          brgyHouseholdNo: household.brgyHouseholdNo,
         },
       });
+      if (!createdHousehold) {
+        createdHousehold = await tx.household.create({
+          data: {
+            brgyHouseholdNo: household.brgyHouseholdNo,
+            blockId: block.id,
+          },
+        });
+      }
 
       const createdAddress = await tx.address.create({
         data: {
