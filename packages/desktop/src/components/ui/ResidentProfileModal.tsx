@@ -101,6 +101,9 @@ function buildFormData(detail: ResidentDetail) {
         occupation: detail.occupation ?? '',
         studentStatus: detail.studentType ?? '',
         householdNo: detail.household?.householdNo ?? '',
+        blockNumber: detail.household?.blockNumber ?? '',
+        familyDisplayId:
+            detail.familyDisplayId != null ? String(detail.familyDisplayId) : '',
         streetName: detail.household?.streetName ?? '',
         alley: detail.household?.alley ?? '',
         voter: detail.voter === 'Yes',
@@ -535,12 +538,40 @@ const ResidentProfileModal: React.FC<ResidentProfileModalProps> = ({ isOpen, onC
                                             />
                                         </div>
                                         <div className="space-y-1.5">
+                                            <label className="text-[12px] font-semibold text-gray-500">Block No.</label>
+                                            <div className="relative">
+                                                <input 
+                                                    type="text" 
+                                                    name="blockNumber"
+                                                    value={formData.blockNumber}
+                                                    readOnly
+                                                    disabled
+                                                    className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-[13px] font-medium text-gray-500 focus:outline-none cursor-not-allowed pr-8" 
+                                                />
+                                                <Lock size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                                            </div>
+                                        </div>
+                                        <div className="space-y-1.5">
                                             <label className="text-[12px] font-semibold text-gray-500">Household No.</label>
                                             <div className="relative">
                                                 <input 
                                                     type="text" 
                                                     name="householdNo"
                                                     value={formData.householdNo}
+                                                    readOnly
+                                                    disabled
+                                                    className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-[13px] font-medium text-gray-500 focus:outline-none cursor-not-allowed pr-8" 
+                                                />
+                                                <Lock size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                                            </div>
+                                        </div>
+                                        <div className="space-y-1.5">
+                                            <label className="text-[12px] font-semibold text-gray-500">Family No.</label>
+                                            <div className="relative">
+                                                <input 
+                                                    type="text" 
+                                                    name="familyDisplayId"
+                                                    value={formData.familyDisplayId}
                                                     readOnly
                                                     disabled
                                                     className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-[13px] font-medium text-gray-500 focus:outline-none cursor-not-allowed pr-8" 

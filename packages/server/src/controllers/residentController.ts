@@ -173,7 +173,7 @@ async function buildResidentDetail(id: string) {
       include: {
         familyHead: {
           include: {
-            household: true,
+            household: { include: { block: true } },
             address: true,
           },
         },
@@ -182,7 +182,7 @@ async function buildResidentDetail(id: string) {
             family: {
               include: {
                 headPerson: true,
-                household: true,
+                household: { include: { block: true } },
                 address: true,
               },
             },
@@ -226,6 +226,7 @@ async function buildResidentDetail(id: string) {
   const household = family
     ? {
         householdNo: family.household?.brgyHouseholdNo ?? "",
+        blockNumber: family.household?.block?.blockNumber ?? "",
         streetName: family.address?.streetName ?? "",
         alley: family.address?.alleyName ?? "",
       }
@@ -279,6 +280,7 @@ async function buildResidentDetail(id: string) {
     updatedAt: resident.updatedAt,
     familyHead: familyHeadLabel ? { name: familyHeadLabel } : null,
     relationshipToHead,
+    familyDisplayId: family?.displayId ?? null,
     household,
     orders,
     auditTrails: shapedAuditTrails,
